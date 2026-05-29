@@ -1238,6 +1238,9 @@ export async function sendLineAttendanceNotification(attendance: AttendanceLog) 
   const headerBgColor = isCheckOut ? "#dc2626" : "#16a34a"; // Red for checkout, green for checkin
   const timeLabel = isCheckOut ? `เวลาออกงาน: ${attendance.checkOutTime}` : `เวลาเข้างาน: ${attendance.checkInTime}`;
 
+  const targetPhoto = isCheckOut ? (attendance.photoUrlOut || attendance.photoUrl) : attendance.photoUrl;
+  const hasValidPhotoUrl = targetPhoto && !targetPhoto.startsWith('data:');
+
   const flexJson = {
     "type": "flex",
     "altText": `⏱️ ${attendance.employeeName} ${isCheckOut ? 'ลงเวลาออกงาน' : 'ลงเวลาเข้างาน'}`,
@@ -1271,10 +1274,10 @@ export async function sendLineAttendanceNotification(attendance: AttendanceLog) 
         "layout": "vertical",
         "paddingAll": "xl",
         "contents": [
-          ...(attendance.photoUrl ? [
+          ...(hasValidPhotoUrl ? [
             {
               "type": "image",
-              "url": attendance.photoUrl,
+              "url": targetPhoto,
               "size": "full",
               "aspectRatio": "1.51:1",
               "aspectMode": "cover",
@@ -1374,6 +1377,16 @@ export async function sendLineAttendanceNotification(attendance: AttendanceLog) 
                 "contents": [
                   { "type": "text", "text": "พิกัดดาวเทียม (GPS)", "color": "#64748b", "size": "xs", "flex": 4 },
                   { "type": "text", "text": isCheckOut ? (attendance.gpsLocOut || 'ไม่ระบุ') : attendance.gpsLocIn, "color": "#3b82f6", "size": "xs", "flex": 5, "weight": "bold" }
+                ]
+              },
+              {
+                "type": "box",
+                "layout": "baseline",
+                "spacing": "sm",
+                "margin": "sm",
+                "contents": [
+                  { "type": "text", "text": "ภาพถ่ายใบหน้า", "color": "#64748b", "size": "xs", "flex": 4 },
+                  { "type": "text", "text": targetPhoto && targetPhoto.startsWith('data:') ? "📸 เซลฟี่ใบหน้าจริงสำเร็จ" : "👤 ใช้ภาพโปรไฟล์แทน", "color": "#0d9488", "size": "xs", "flex": 5, "weight": "bold" }
                 ]
               },
               {

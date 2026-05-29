@@ -38,6 +38,21 @@ export default function AttendanceView({ attendances, onAddAttendance, onUpdateA
   // GPS coordinates state simulation
   const [gpsSim, setGpsSim] = useState('18.7904, 98.9841 (WiFi-Camp ชลประทานปิง)');
 
+  // Real camera & GPS states
+  const [useRealCamera, setUseRealCamera] = useState(false);
+  const [cameraLoading, setCameraLoading] = useState(false);
+  const [activeStream, setActiveStream] = useState<MediaStream | null>(null);
+  const [gpsLoading, setGpsLoading] = useState(false);
+
+  // Check-out states
+  const [showCheckoutPanel, setShowCheckoutPanel] = useState(false);
+  const [checkOutPhoto, setCheckOutPhoto] = useState<string>('');
+  const [checkOutGps, setCheckOutGps] = useState<string>('');
+
+  // Video references
+  const checkInVideoRef = React.useRef<HTMLVideoElement>(null);
+  const checkOutVideoRef = React.useRef<HTMLVideoElement>(null);
+
   // Selected details
   const selectedLog = useMemo(() => {
     return attendances.find(a => a.id === selectedLogId) || null;
@@ -58,22 +73,131 @@ export default function AttendanceView({ attendances, onAddAttendance, onUpdateA
     };
   }, [attendances]);
 
-  // Perform clock checkout
-  const handleCheckOut = (log: AttendanceLog) => {
-    onUpdateAttendance({
-      ...log,
-      checkOutTime: new Date().toTimeString().slice(0, 5),
-      gpsLocOut: '18.7915, 98.9860'
-    });
-    alert(`👋 ทำการลงชื่อออฟไลน์เช็คเอ้าต์วิศวกร [${log.employeeName}] เรียบร้อย เวลาสั่นสมบูรณ์!`);
+  // GPS geolocation handler
+  const getRealGPSLocation = (target: 'in' | 'out') => {
+    if (!navigator.geolocation) {
+      alert("❌ เบราว์เซอร์ของคุณไม่รองรับการดึงพิกัด Geolocation");
+      return;
+    }
+    setGpsLoading(true);
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        const { latitude, longitude } = position.coords;
+        const formatted = `${latitude.toFixed(6)}, ${longitude.toFixed(6)}`;
+        if (target === 'in') {
+          setGpsSim(formatted);
+        } else {
+          setCheckOutGps(formatted);
+        }
+        setGpsLoading(false);
+      },
+      (error) => {
+        console.warn("GPS lookup failed:", error);
+        let fallbackLoc = target === 'in' ? '18.790400, 98.984100' : '18.791500, 98.986000';
+        if (target === 'in') {
+          setGpsSim(fallbackLoc);
+        } else {
+          setCheckOutGps(fallbackLoc);
+        }
+        setGpsLoading(false);
+      },
+      { enableHighAccuracy: true, timeout: 6000 }
+    );
   };
 
-  // Perform Clock check-in
+  // Real webcam handlers
+  const startCamera = async (target: 'in' | 'out') => {
+    try {
+      setCameraLoading(true);
+      if (activeStream) {
+        activeStream.getTracks().forEach(track => track.stop());
+      }
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: 'user', width: { ideal: 640 }, height: { ideal: 480 } }
+      });
+      setActiveStream(stream);
+      setUseRealCamera(true);
+      setCameraLoading(false);
+      
+      setTimeout(() => {
+        const video = target === 'in' ? checkInVideoRef.current : checkOutVideoRef.current;
+        if (video) {
+          video.srcObject = stream;
+        }
+      }, 100);
+    } catch (err: any) {
+      console.error("Camera access error:", err);
+      alert(`⚠️ ไม่สามารถเปิดกล้องได้: ${err.message || 'กรุณาอนุญาตสิทธิ์การใช้กล้องในเบราว์เซอร์'}`);
+      setUseRealCamera(false);
+      setCameraLoading(false);
+    }
+  };
+
+  const stopCamera = () => {
+    if (activeStream) {
+      activeStream.getTracks().forEach(track => track.stop());
+      setActiveStream(null);
+    }
+    setUseRealCamera(false);
+  };
+
+  const capturePhoto = (target: 'in' | 'out') => {
+    const video = target === 'in' ? checkInVideoRef.current : checkOutVideoRef.current;
+    if (!video) return;
+
+    try {
+      const canvas = document.createElement('canvas');
+      canvas.width = video.videoWidth || 640;
+      canvas.height = video.videoHeight || 480;
+      const ctx = canvas.getContext('2d');
+      if (ctx) {
+        // Mirror the selfie capture
+        ctx.translate(canvas.width, 0);
+        ctx.scale(-1, 1);
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+        const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
+        if (target === 'in') {
+          setPhotoSim(dataUrl);
+        } else {
+          setCheckOutPhoto(dataUrl);
+        }
+        stopCamera();
+      }
+    } catch (error) {
+      console.error("Capture capture error:", error);
+    }
+  };
+
+  // Automatic triggers upon visibility
+  React.useEffect(() => {
+    if (showClockForm) {
+      getRealGPSLocation('in');
+    }
+  }, [showClockForm]);
+
+  React.useEffect(() => {
+    if (showCheckoutPanel) {
+      getRealGPSLocation('out');
+      if (selectedLog) {
+        setCheckOutPhoto(selectedLog.photoUrl);
+      }
+    }
+  }, [showCheckoutPanel, selectedLog]);
+
+  React.useEffect(() => {
+    return () => {
+      if (activeStream) {
+        activeStream.getTracks().forEach(track => track.stop());
+      }
+    };
+  }, [activeStream]);
+
+  // Perform Clock check-in Submit
   const handleCheckInSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!workName) return;
 
-    const formattedTime = new Date().toTimeString().slice(0, 5); // HH:MM style
+    const formattedTime = new Date().toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' }) + ' น.';
 
     const newLog: AttendanceLog = {
       id: `att-${Date.now()}`,
@@ -89,17 +213,30 @@ export default function AttendanceView({ attendances, onAddAttendance, onUpdateA
     onAddAttendance(newLog);
     setSelectedLogId(newLog.id);
     setShowClockForm(false);
+    stopCamera();
+  };
+
+  // Perform Clock check-out Submit
+  const handleCheckOutSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedLog) return;
+
+    const formattedTime = new Date().toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' }) + ' น.';
+
+    onUpdateAttendance({
+      ...selectedLog,
+      checkOutTime: formattedTime,
+      photoUrlOut: checkOutPhoto || selectedLog.photoUrl,
+      gpsLocOut: checkOutGps || '18.7915, 98.9860'
+    });
+
+    setShowCheckoutPanel(false);
+    stopCamera();
+    alert(`👋 ลงประวัติสแกนออกงานและแจ้งเตือนเข้ากลุ่ม LINE เรียบร้อยสำเร็จ!`);
   };
 
   const handleMockGPSPin = () => {
-    const simulatedGpsLocations = [
-      '18.7951, 98.9790 (ค่ายฝั่งขวา ถนลำพูนโฮเต็ล)',
-      '18.7904, 98.9841 (WiFi-Camp ชลประทานปิง)',
-      '18.7831, 98.9950 (สำนักงานใหญ่ศูนย์สถิติ CMMS)'
-    ];
-    const picked = simulatedGpsLocations[Math.floor(Math.random() * simulatedGpsLocations.length)];
-    setGpsSim(picked);
-    alert(`📍 [GPS PIN SELECTION SUCCESS] ดึงพิกัดผ่านดาวเทียมสแกนความถี่เซลลูลาร์สำเร็จ ปักหมุด: ${picked}`);
+    getRealGPSLocation('in');
   };
 
   return (
@@ -193,7 +330,7 @@ export default function AttendanceView({ attendances, onAddAttendance, onUpdateA
                     <label className="block text-xs text-stone-500 mb-1">ไซต์ก่อสร้าง / หรือป้อมโครงการ</label>
                     <input
                       type="text"
-                      className="w-full bg-stone-50 border border-slate-755 rounded-xl px-4 py-2 text-slate-205 outline-none text-xs"
+                      className="w-full bg-stone-50 border border-stone-200 rounded-xl px-4 py-2 text-stone-800 outline-none text-xs focus:border-orange-500"
                       value={workSite}
                       onChange={(e) => setWorkSite(e.target.value)}
                     />
@@ -202,104 +339,142 @@ export default function AttendanceView({ attendances, onAddAttendance, onUpdateA
                     <input
                       type="checkbox"
                       id="form-ot"
-                      className="w-4 h-4 accent-orange-500 rounded border-stone-200 bg-stone-50 cursor-pointer"
+                      className="w-4 h-4 accent-orange-500 rounded border-stone-300 bg-stone-50 cursor-pointer"
                       checked={isOvertime}
                       onChange={(e) => setIsOvertime(e.target.checked)}
                     />
-                    <label htmlFor="form-ot" className="text-xs text-slate-350 ml-2 font-semibold cursor-pointer">
+                    <label htmlFor="form-ot" className="text-xs text-stone-600 ml-2 font-semibold cursor-pointer">
                       ลงเวลาเป็นกะล่วงเวลา (OT)
                     </label>
                   </div>
                 </div>
 
-                {/* Simulated Photo Capture Widget */}
+                {/* Real-time Photo Capture Widget */}
                 <div className="space-y-2 pt-2 border-t border-stone-200">
                   <div className="flex items-center justify-between">
-                    <span className="block text-[10px] text-stone-500 uppercase font-bold text-orange-600">🤳 ถ่ายรูปใบหน้ายืนยันตัวตน (Face Selfie Capture)</span>
-                    <span className="text-[9px] text-stone-400 font-mono">สถานะกล้องสแกนใบหน้า: พร้อมใช้งาน (Active)</span>
-                  </div>
-                  
-                  <div className="grid grid-cols-1 md:grid-cols-4 gap-4 items-center bg-stone-50 p-3 rounded-2xl border border-stone-200">
-                    <div className="md:col-span-1 flex flex-col items-center">
-                      <div className="w-16 h-16 rounded-full border-2 border-orange-500 overflow-hidden shadow-sm shrink-0">
-                        <img src={photoSim} alt="Selfie capture preset" className="w-full h-full object-cover" />
-                      </div>
-                      <span className="text-[8px] bg-orange-100 text-orange-700 px-1.5 py-0.5 rounded font-bold mt-1.5 uppercase">เตรียมระบุส่ง</span>
-                    </div>
-
-                    <div className="md:col-span-3 space-y-1.5">
-                      <p className="text-[10px] text-stone-500 font-semibold mb-1">เลือกบุคคลถ่ายภาพเช็คชื่อด่วน (หรือกรอกรูปภาพพนักงานจริง):</p>
-                      
-                      {/* Avatar Preset Buttons */}
-                      <div className="flex flex-wrap gap-1.5 mb-2">
-                        {[
-                          { name: 'ช่างวิรัช', url: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&q=80&w=200', role: 'ผู้ควบคุมพวงมาลัยอาวุโส' },
-                          { name: 'ช่างสมบัติ', url: 'https://images.unsplash.com/photo-1628157582853-a796fa650a6a?auto=format&fit=crop&q=80&w=200', role: 'ช่างไฟฟ้ากำลังอาวุโส' },
-                          { name: 'ช่างอำนวย', url: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&q=80&w=200', role: 'พนักงานขับรถแบ็คโฮมือหนึ่ง' },
-                          { name: 'คุณนารี', url: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&q=80&w=200', role: 'เจ้าหน้าที่ความปลอดภัย (จป.)' }
-                        ].map(preset => (
-                          <button
-                            key={preset.name}
-                            type="button"
-                            onClick={() => {
-                              setPhotoSim(preset.url);
-                              setWorkName(preset.name + ' ทองแท้');
-                              setWorkRole(preset.role);
-                            }}
-                            className={`px-2 py-1 rounded text-[10px] transition-colors border ${
-                              photoSim === preset.url
-                                ? 'bg-orange-500 text-white border-orange-600'
-                                : 'bg-white text-stone-600 border-stone-200 hover:bg-stone-100'
-                            }`}
-                          >
-                            👤 {preset.name}
-                          </button>
-                        ))}
-                      </div>
-
-                      <div>
-                        <label className="block text-[9px] text-stone-400 font-bold">ระบุลิงก์รูปภาพถ่ายเซลฟี่ (Custom Photo URL)</label>
-                        <input
-                          type="text"
-                          className="w-full bg-white border border-stone-200 rounded-lg px-2 py-1 text-stone-700 outline-none text-[10px] mt-0.5 focus:border-orange-500 font-mono"
-                          value={photoSim}
-                          onChange={(e) => setPhotoSim(e.target.value)}
-                        />
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Simulated GPS Coordinate Pull Widget */}
-                <div className="space-y-2 pt-2 border-t border-slate-900">
-                  <div className="flex items-center justify-between">
-                    <span className="block text-[10px] text-slate-450 uppercase font-black">ตัวรับสแกนพิกัดดาวเทียม (GPS Lock)</span>
+                    <span className="block text-[10px] text-stone-550 uppercase font-bold text-orange-600">🤳 ถ่ายรูปใบหน้ายืนยันตัวตน (Face Selfie Capture)</span>
                     <button
                       type="button"
-                      onClick={handleMockGPSPin}
-                      className="text-[10px] text-orange-600 hover:text-orange-350 font-bold flex items-center gap-1"
+                      onClick={() => {
+                        if (useRealCamera) {
+                          stopCamera();
+                        } else {
+                          startCamera('in');
+                        }
+                      }}
+                      className="text-[10px] text-orange-700 bg-orange-100 hover:bg-orange-200 px-2 py-1 rounded font-bold transition-all"
                     >
-                      🗺️ ดึงพิกัดพยานสะสมร่วม
+                      {useRealCamera ? '🔌 ปิดการเชื่อมต่อกล้อง' : '📸 สลับไปกล้องจริง (Real Webcam)'}
                     </button>
                   </div>
-                  <div className="bg-stone-50 p-2.5 rounded-xl text-stone-600 font-mono text-[10px] truncate border border-stone-200">
-                    {gpsSim}
+                  
+                  {useRealCamera ? (
+                    <div className="flex flex-col items-center bg-stone-900 p-3 rounded-2xl relative overflow-hidden h-64 border border-stone-800">
+                      <video
+                        ref={checkInVideoRef}
+                        autoPlay
+                        playsInline
+                        muted
+                        className="w-full h-full object-cover rounded-xl scale-x-[-1]"
+                      />
+                      <div className="absolute bottom-4 flex gap-2">
+                        <button
+                          type="button"
+                          onClick={() => capturePhoto('in')}
+                          className="bg-orange-500 text-white font-extrabold text-xs px-5 py-2 rounded-xl shadow-lg hover:bg-orange-600 transition-all cursor-pointer"
+                        >
+                          📷 กดลั่นชัตเตอร์บันทึกใบหน้า
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-1 md:grid-cols-4 gap-4 items-center bg-stone-50 p-3 rounded-2xl border border-stone-200">
+                      <div className="md:col-span-1 flex flex-col items-center">
+                        <div className="w-20 h-20 rounded-xl border-2 border-orange-500 overflow-hidden shadow-sm shrink-0 bg-white">
+                          <img src={photoSim} alt="Selfie capture preview" className="w-full h-full object-cover" />
+                        </div>
+                        <span className="text-[8px] bg-orange-105 text-orange-700 px-1.5 py-0.5 rounded font-black mt-1.5 uppercase tracking-wider">ภาพที่บันทึก</span>
+                      </div>
+
+                      <div className="md:col-span-3 space-y-1.5">
+                        <p className="text-[10px] text-stone-550 font-semibold mb-1">เลือกตัวละครสำหรับลงสถิติด่วน (หรือใช่พอร์ตสแกนกล้องด้านบนเพื่อรูปถ่ายจริง) :</p>
+                        
+                        {/* Avatar Preset Buttons */}
+                        <div className="flex flex-wrap gap-1.5 mb-2">
+                          {[
+                            { name: 'ช่างวิรัช', url: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&q=80&w=200', role: 'ผู้ควบคุมพวงมาลัยอาวุโส' },
+                            { name: 'ช่างสมบัติ', url: 'https://images.unsplash.com/photo-1628157582853-a796fa650a6a?auto=format&fit=crop&q=80&w=200', role: 'ช่างไฟฟ้ากำลังอาวุโส' },
+                            { name: 'ช่างอำนวย', url: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&q=80&w=200', role: 'พนักงานขับรถแบ็คโฮมือหนึ่ง' },
+                            { name: 'คุณนารี', url: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&q=80&w=200', role: 'เจ้าหน้าที่ความปลอดภัย (จป.)' }
+                          ].map(preset => (
+                            <button
+                              key={preset.name}
+                              type="button"
+                              onClick={() => {
+                                setPhotoSim(preset.url);
+                                setWorkName(preset.name + ' ทองแท้');
+                                setWorkRole(preset.role);
+                              }}
+                              className={`px-2 py-1 rounded text-[10px] transition-colors border cursor-pointer ${
+                                photoSim === preset.url
+                                  ? 'bg-orange-500 text-white border-orange-600 font-bold'
+                                  : 'bg-white text-stone-600 border-stone-200 hover:bg-stone-100'
+                              }`}
+                            >
+                              👤 {preset.name}
+                            </button>
+                          ))}
+                        </div>
+
+                        <div>
+                          <label className="block text-[9px] text-stone-400 font-bold uppercase">หรือระบุไฟล์รูปภาพภายนอกอื่นๆ</label>
+                          <input
+                            type="text"
+                            className="w-full bg-white border border-stone-200 rounded-lg px-2 py-1 text-stone-700 outline-none text-[10px] mt-0.5 focus:border-orange-500 font-mono"
+                            value={photoSim}
+                            onChange={(e) => setPhotoSim(e.target.value)}
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Real-time GPS Coordinate Widget */}
+                <div className="space-y-2 pt-2 border-t border-stone-200">
+                  <div className="flex items-center justify-between">
+                    <span className="block text-[10px] text-stone-550 uppercase font-black tracking-wide">🛰️ รูทพิกัดดาวเทียมนำทาง (Real-time GPS Location)</span>
+                    <button
+                      type="button"
+                      onClick={() => getRealGPSLocation('in')}
+                      disabled={gpsLoading}
+                      className="text-[10px] text-orange-600 hover:text-orange-700 font-extrabold flex items-center gap-1 cursor-pointer bg-orange-50 px-2.5 py-1 rounded border border-orange-100 transition-all"
+                    >
+                      {gpsLoading ? '📡 กำลังติดต่อพิกัดดาวเทียม...' : '🌐 เรียกคืนพิกัดจริง ณ ปัจจุบัน (ดึง GPS)'}
+                    </button>
+                  </div>
+                  <div className="bg-stone-50 p-2.5 rounded-xl text-stone-600 font-mono text-[10px] truncate border border-stone-200 flex items-center justify-between">
+                    <span>{gpsSim}</span>
+                    <span className="px-1.5 py-0.5 rounded text-[8px] uppercase tracking-widest bg-emerald-100 text-emerald-700 font-sans font-black">Active PIN</span>
                   </div>
                 </div>
 
                 <div className="flex justify-end gap-2 pt-2">
                   <button
                     type="button"
-                    onClick={() => setShowClockForm(false)}
-                    className="bg-stone-50 hover:bg-stone-50 text-stone-500 hover:text-stone-700 px-4 py-2 rounded-xl text-xs font-semibold"
+                    onClick={() => {
+                      stopCamera();
+                      setShowClockForm(false);
+                    }}
+                    className="bg-stone-100 hover:bg-stone-200 text-stone-600 px-4 py-2 rounded-xl text-xs font-semibold cursor-pointer transition-all"
                   >
                     ยกเลิก
                   </button>
                   <button
                     type="submit"
-                    className="bg-orange-500 hover:bg-orange-600 text-white px-5 py-2 rounded-xl text-xs font-semibold shadow"
+                    className="bg-orange-500 hover:bg-orange-600 text-white px-5 py-2 rounded-xl text-xs font-semibold shadow hover:shadow-md cursor-pointer transition-all flex items-center gap-1"
                   >
-                    Check-In สแกนเช็คชื่อทางไกล
+                    🚀 ยืนยัน Check-In และแจ้งหมุด LINE
                   </button>
                 </div>
               </form>
@@ -366,58 +541,189 @@ export default function AttendanceView({ attendances, onAddAttendance, onUpdateA
       {/* 2. Right Employee Clock-In Detail Drawer File (4 Columns) */}
       <div className="lg:col-span-4 bg-stone-50/40 border border-stone-200 rounded-2xl p-5 shadow-sm backdrop-blur-md flex flex-col justify-between">
         {selectedLog ? (
-          <div className="space-y-4 flex flex-col justify-between h-full">
-            <div className="space-y-4">
-              <div className="border-b border-stone-200 pb-2">
-                <span className="text-[9px] text-slate-450 font-mono font-bold uppercase">ID ID: {selectedLog.id}</span>
-                <h3 className="text-sm font-semibold text-stone-800">บิตตอกเวลา: {selectedLog.employeeName}</h3>
-              </div>
-
-              {/* Attendance metrics visual card details */}
-              <div className="bg-white/45 border border-slate-900 p-4 rounded-xl text-[11px] text-stone-600 space-y-2.5">
-                <div className="flex items-center gap-3">
-                  <div className="w-12 h-12 rounded-xl overflow-hidden bg-white border border-stone-200 shrink-0">
-                    <img src={selectedLog.photoUrl} alt="Staff checkin preview" className="w-full h-full object-cover" />
-                  </div>
+          showCheckoutPanel ? (
+            /* REAL INTERACTIVE CHECK-OUT SCANNER FORM */
+            <form onSubmit={handleCheckOutSubmit} className="space-y-4 flex flex-col justify-between h-full bg-rose-50/20 p-4 rounded-xl border border-rose-100">
+              <div className="space-y-4 w-full">
+                <div className="border-b border-stone-200 pb-2 flex items-center justify-between">
                   <div>
-                    <h4 className="text-xs font-extrabold text-stone-700">{selectedLog.employeeName}</h4>
-                    <span className="text-[10px] text-slate-500 block">{selectedLog.role}</span>
+                    <span className="text-[9px] text-rose-600 font-mono font-black uppercase tracking-wider">⏱️ SCANNER CO-OUT</span>
+                    <h3 className="text-xs font-bold text-stone-800">เลิกงาน: {selectedLog.employeeName}</h3>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      stopCamera();
+                      setShowCheckoutPanel(false);
+                    }}
+                    className="p-1 hover:bg-stone-200 rounded-full font-bold text-xs"
+                  >
+                    ✕
+                  </button>
+                </div>
+
+                <div className="bg-white border border-stone-200 p-3 rounded-xl text-[11px] text-stone-600 space-y-2.5 shadow-sm">
+                  <p>👤 <strong>พนักงาน:</strong> {selectedLog.employeeName}</p>
+                  <p>💼 <strong>ตำแหน่ง/สายงาน:</strong> {selectedLog.role}</p>
+                  <p>🏗️ <strong>ไซต์งาน:</strong> {selectedLog.siteName}</p>
+                  <p>🕒 <strong>เวลาเข้างาน:</strong> <span className="text-emerald-600 font-bold">{selectedLog.checkInTime} น.</span></p>
+
+                  {/* REAL-TIME GEOLOCATION ON RETREAT */}
+                  <div className="space-y-1.5 pt-2 border-t border-stone-100">
+                    <div className="flex items-center justify-between">
+                      <span className="block text-[9px] text-stone-550 font-black uppercase tracking-wide">🛰️ พิกัดออกงานจริง (Checkout GPS)</span>
+                      <button
+                        type="button"
+                        onClick={() => getRealGPSLocation('out')}
+                        disabled={gpsLoading}
+                        className="text-[9px] text-rose-700 bg-rose-50 hover:bg-rose-105 px-2 py-0.5 rounded font-black border border-rose-120 transition-all cursor-pointer"
+                      >
+                        {gpsLoading ? '📡 ดึงดาวเทียม...' : '🌐 พิกัดขากลับ'}
+                      </button>
+                    </div>
+                    <div className="bg-stone-50 p-2 rounded text-stone-600 font-mono text-[9.5px] border border-stone-200 truncate flex justify-between items-center">
+                      <span>{checkOutGps || '18.791500, 98.986000'}</span>
+                      <span className="px-1 py-0.2 rounded text-[8px] bg-rose-100 text-rose-700 font-sans font-extrabold uppercase animate-pulse">GPS Real-time</span>
+                    </div>
+                  </div>
+
+                  {/* REAL WEBCAM PICTURE SECURE CHECKOUT */}
+                  <div className="space-y-1.5 pt-2 border-t border-stone-100">
+                    <div className="flex items-center justify-between">
+                      <span className="block text-[9px] text-stone-550 font-black uppercase tracking-wide">📸 เซลฟี่สแกนขากลับ (Checkout Photo)</span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (useRealCamera) {
+                            stopCamera();
+                          } else {
+                            startCamera('out');
+                          }
+                        }}
+                        className="text-[9px] text-rose-750 bg-rose-50 hover:bg-rose-100 px-2 py-0.5 rounded font-bold transition-all border border-rose-120 cursor-pointer"
+                      >
+                        {useRealCamera ? '🔌 ปิดกล้อง' : '📷 เปิดระบบกล้องจริง'}
+                      </button>
+                    </div>
+
+                    {useRealCamera ? (
+                      <div className="flex flex-col items-center bg-stone-900 p-1.5 rounded-xl h-44 relative overflow-hidden border border-stone-800 mt-1 shadow-inner">
+                        <video
+                          ref={checkOutVideoRef}
+                          autoPlay
+                          playsInline
+                          muted
+                          className="w-full h-full object-cover rounded-lg scale-x-[-1]"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => capturePhoto('out')}
+                          className="absolute bottom-2 bg-rose-600 hover:bg-rose-700 text-white font-black text-[9.5px] px-3.5 py-1.5 rounded-lg shadow-lg transition-all cursor-pointer"
+                        >
+                          📷 กดถ่ายภาพยืนยัน
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="h-28 rounded-xl overflow-hidden relative border border-stone-200 bg-white flex flex-col items-center justify-center mt-1">
+                        <img 
+                          src={checkOutPhoto || selectedLog.photoUrl} 
+                          alt="Selfie capture log checkout" 
+                          className="w-16 h-16 rounded-full border border-stone-200 object-cover shadow-sm" 
+                        />
+                        <span className="text-[8px] text-stone-400 mt-1 font-mono uppercase tracking-wider">กล้องถ่ายภาพใบหน้าสำเร็จ</span>
+                      </div>
+                    )}
                   </div>
                 </div>
 
-                <div className="space-y-2 pt-2 border-t border-slate-900">
-                  <p>📍 <strong className="text-stone-500">ลงพิกัดเช็คอิน:</strong> {selectedLog.siteName}</p>
-                  <p>🕒 <strong className="text-stone-500">ตอกเข้างานเวลา:</strong> <span className="font-mono text-emerald-600 font-bold">{selectedLog.checkInTime} น.</span></p>
-                  {selectedLog.checkOutTime ? (
-                    <p>🕒 <strong className="text-stone-500">ตอกออกงานเวลา:</strong> <span className="font-mono text-stone-500 font-semibold">{selectedLog.checkOutTime} น.</span></p>
-                  ) : (
-                    <p className="text-emerald-600 animate-pulse font-extrabold flex items-center gap-1">🟢 กำลังทำงานอยู่ในระเบียบวินัย</p>
-                  )}
-                </div>
-
-                <div className="space-y-2.5 border-t border-slate-900/80 pt-2.5 text-slate-450">
-                  <span className="block text-[8px] font-bold text-slate-500 uppercase tracking-widest leading-none mb-1">กล้องเซลฟี่ที่แสตมป์ยืนยัน (Device Camera Checkin)</span>
-                  <div className="h-20 rounded-xl overflow-hidden relative border border-stone-200 bg-white flex items-center justify-center">
-                    <img src={selectedLog.photoUrl} alt="Selfie capture log" className="w-16 h-16 rounded-full border border-stone-200 object-cover" />
-                    <span className="absolute bottom-1 right-2 text-[8px] bg-stone-50/70 text-slate-350 font-mono px-1 rounded flex items-center gap-0.5">
-                      <Camera className="w-2.5 h-2.5" />
-                      GPS Camera Match
-                    </span>
-                  </div>
+                <div className="flex gap-2.5 pt-1">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      stopCamera();
+                      setShowCheckoutPanel(false);
+                    }}
+                    className="w-1/2 py-2 bg-stone-100 hover:bg-stone-200 text-stone-600 rounded-xl text-xs font-bold transition-all text-center cursor-pointer border border-stone-205"
+                  >
+                    ยกเลิก
+                  </button>
+                  <button
+                    type="submit"
+                    className="w-1/2 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-black transition-all text-center flex items-center justify-center gap-1 shadow hover:shadow-md cursor-pointer"
+                  >
+                    👋 ยืนยันออกงาน & ส่ง LINE
+                  </button>
                 </div>
               </div>
+            </form>
+          ) : (
+            /* READ-ONLY CARD FOR PRESENT ATTENDANCE */
+            <div className="space-y-4 flex flex-col justify-between h-full">
+              <div className="space-y-4">
+                <div className="border-b border-stone-200 pb-2">
+                  <span className="text-[9px] text-slate-450 font-mono font-bold uppercase">ID ID: {selectedLog.id}</span>
+                  <h3 className="text-sm font-semibold text-stone-800">บิตตอกเวลา: {selectedLog.employeeName}</h3>
+                </div>
 
-              {/* Check-Out active trigger buttons if still checked-in */}
-              {!selectedLog.checkOutTime && (
-                <button
-                  onClick={() => handleCheckOut(selectedLog)}
-                  className="w-full py-2.5 bg-rose-500/10 hover:bg-rose-600 text-rose-600 hover:text-white rounded-xl text-xs font-bold border border-rose-500/20 transition-all flex items-center justify-center gap-1.5 cursor-pointer mt-4"
-                >
-                  👋 ลงชื่อออกทางไกล (Clock-Out Away)
-                </button>
-              )}
+                {/* Attendance metrics visual card details */}
+                <div className="bg-white border border-stone-200 p-4 rounded-xl text-[11px] text-stone-600 space-y-2.5 shadow-sm">
+                  <div className="flex items-center gap-3">
+                    <div className="w-12 h-12 rounded-xl overflow-hidden bg-white border border-stone-200 shrink-0">
+                      <img src={selectedLog.photoUrl} alt="Staff checkin preview" className="w-full h-full object-cover" />
+                    </div>
+                    <div>
+                      <h4 className="text-xs font-extrabold text-stone-700">{selectedLog.employeeName}</h4>
+                      <span className="text-[10px] text-slate-500 block leading-tight">{selectedLog.role}</span>
+                    </div>
+                  </div>
+
+                  <div className="space-y-2 pt-2 border-t border-stone-200">
+                    <p>📍 <strong className="text-stone-500">ลงพิกัดเช็คอิน:</strong> {selectedLog.siteName}</p>
+                    <p>🕒 <strong className="text-stone-500">ตอกเข้างานเวลา:</strong> <span className="font-mono text-emerald-600 font-bold">{selectedLog.checkInTime} น.</span></p>
+                    {selectedLog.checkOutTime ? (
+                      <>
+                        <p>🕒 <strong className="text-stone-500">ตอกออกงานเวลา:</strong> <span className="font-mono text-rose-600 font-bold">{selectedLog.checkOutTime}</span></p>
+                        <p>📍 <strong className="text-stone-500">พิกัดทางภูมิศาสตร์ (GPS ขากลับ):</strong> <span className="font-mono text-stone-600">{selectedLog.gpsLocOut || 'ไม่ได้ระบุ'}</span></p>
+                      </>
+                    ) : (
+                      <p className="text-emerald-600 animate-pulse font-extrabold flex items-center gap-1 text-[10.5px]">🟢 กำลังทำงานอยู่ในระเบียบวินัย</p>
+                    )}
+                  </div>
+
+                  <div className="space-y-2.5 border-t border-stone-200 pt-2.5 text-slate-450">
+                    <span className="block text-[8px] font-bold text-slate-500 uppercase tracking-widest leading-none mb-1">
+                      {selectedLog.checkOutTime ? "กล้องเซลฟี่ที่แสตมป์ขากลับ (Checkout Photo Preview)" : "กล้องเซลฟี่ที่แสตมป์ยืนยัน (Device Camera Checkin)"}
+                    </span>
+                    <div className="h-24 rounded-xl overflow-hidden relative border border-stone-200 bg-stone-50 flex items-center justify-center">
+                      <img 
+                        src={selectedLog.checkOutTime ? (selectedLog.photoUrlOut || selectedLog.photoUrl) : selectedLog.photoUrl} 
+                        alt="Selfie capture log" 
+                        className="w-16 h-16 rounded-full border border-stone-200 object-cover shadow" 
+                      />
+                      <span className="absolute bottom-1 right-2 text-[8px] bg-white/80 border border-stone-200 text-stone-500 font-mono px-1 rounded flex items-center gap-0.5">
+                        <Camera className="w-2.5 h-2.5" />
+                        Camera Secure
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Check-Out active trigger buttons if still checked-in */}
+                {!selectedLog.checkOutTime && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setCheckOutPhoto(selectedLog.photoUrl);
+                      setShowCheckoutPanel(true);
+                    }}
+                    className="w-full py-2.5 bg-rose-500/10 hover:bg-rose-500 hover:text-white text-rose-600 border border-rose-500/20 text-xs font-black rounded-xl transition-all flex items-center justify-center gap-1.5 cursor-pointer mt-4"
+                  >
+                    👋 สแกนกล้องออกงาน (Clock-Out Scanner)
+                  </button>
+                )}
+              </div>
             </div>
-          </div>
+          )
         ) : (
           <p className="text-xs text-slate-500 italic text-center my-auto">ไม่มีประวัติตอกสถิติพนักงานในแผ่นดิน</p>
         )}

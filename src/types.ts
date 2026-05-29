@@ -99,6 +99,7 @@ export interface AttendanceLog {
   siteName: string;
   isOvertime: boolean;
   photoUrl: string;
+  photoUrlOut?: string;
   gpsLocIn: string;
   gpsLocOut?: string;
 }

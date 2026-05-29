@@ -580,8 +580,6 @@ export default function App() {
     { id: 'refuels', label: 'ขอรับเติมน้ำมัน', icon: Fuel },
     { id: 'expenses', label: 'บัญชีงบ & AI Advisor', icon: Coins },
     { id: 'attendance', label: 'ลงเวลากล้อง GPS', icon: UserCheck },
-    { id: 'line', label: 'จำลอง LINE FLEX', icon: MessageSquare },
-    { id: 'supabase', label: 'Database SQL', icon: Database },
   ];
 
   return (
@@ -799,13 +797,7 @@ export default function App() {
             />
           )}
 
-          {activeTab === 'line' && (
-            <LineFlexBuilder />
-          )}
 
-          {activeTab === 'supabase' && (
-            <DatabaseSchemaView />
-          )}
 
         </main>
         
@@ -820,7 +812,7 @@ export default function App() {
           onTouchStart={startDraggingNav}
           onTouchEnd={stopDraggingNav}
           onTouchMove={onDragNav}
-          className={`md:hidden fixed bottom-0 left-0 right-0 h-[72px] pb-1 ${currentStyle.topbarBg} flex items-center px-4 overflow-x-auto gap-3 z-50 hide-scrollbar rounded-t-[28px] shadow-[0_-10px_40px_-15px_rgba(0,0,0,0.1)] transition-colors duration-300 scroll-smooth select-none`}
+          className={`md:hidden fixed bottom-0 left-0 right-0 h-[72px] pb-1 ${currentStyle.topbarBg} flex flex-row flex-nowrap items-center px-4 overflow-x-auto overflow-y-hidden gap-3 z-50 hide-scrollbar rounded-t-[28px] shadow-[0_-10px_40px_-15px_rgba(0,0,0,0.1)] transition-colors duration-300 scroll-smooth select-none`}
           style={{ paddingBottom: 'env(safe-area-inset-bottom, 8px)' }}
         >
           {sidebarNavItems.map(item => {
@@ -831,19 +823,24 @@ export default function App() {
             let mobileActiveThemeClasses = "";
             let mobileInactiveThemeClasses = "text-stone-500 hover:text-stone-700";
             let indicatorColor = "";
+            let activeTextColor = "";
             
             if (theme === 'yellow') {
               mobileActiveThemeClasses = "bg-gradient-to-tr from-amber-200 to-yellow-100 text-amber-800 shadow-sm border border-amber-200/60";
               indicatorColor = "bg-amber-500 shadow-[0_0_8px_rgba(245,158,11,0.6)]";
+              activeTextColor = "text-amber-800 font-bold";
             } else if (theme === 'blue') {
               mobileActiveThemeClasses = "bg-gradient-to-tr from-sky-200 to-blue-100 text-sky-800 shadow-sm border border-sky-200/60";
               indicatorColor = "bg-sky-500 shadow-[0_0_8px_rgba(14,165,233,0.6)]";
+              activeTextColor = "text-sky-800 font-bold";
             } else if (theme === 'green') {
               mobileActiveThemeClasses = "bg-gradient-to-tr from-emerald-200 to-green-100 text-emerald-800 shadow-sm border border-emerald-200/60";
               indicatorColor = "bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.6)]";
+              activeTextColor = "text-emerald-800 font-bold";
             } else if (theme === 'white') {
               mobileActiveThemeClasses = "bg-stone-800 text-white shadow-sm border border-stone-800";
               indicatorColor = "bg-stone-800 shadow-[0_0_8px_rgba(28,25,23,0.6)]";
+              activeTextColor = "text-stone-800 font-bold";
             }
 
             return (
@@ -867,7 +864,7 @@ export default function App() {
                 <div className={`p-1.5 rounded-2xl mb-0.5 flex items-center justify-center pointer-events-none ${active ? mobileActiveThemeClasses : 'bg-transparent text-stone-400'}`}>
                   <Icon className={`w-4 h-4`} />
                 </div>
-                <span className={`text-[8px] sm:text-[9px] truncate max-w-[48px] sm:max-w-full tracking-wider pointer-events-none ${active ? (theme === 'white' ? 'text-stone-800' : mobileActiveThemeClasses.split(' ')[2]) : ''}`}>
+                <span className={`text-[8px] sm:text-[9px] truncate max-w-[48px] sm:max-w-full tracking-wider pointer-events-none ${active ? activeTextColor : ''}`}>
                   {item.label}
                 </span>
               </button>
