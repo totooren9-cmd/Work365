@@ -1,0 +1,11 @@
+{
+  "name": "Remix: Remix: FlowWork CMMS 360",
+  "description": "Enterprise-grade heavy machinery CMMS, work schedule, inventory, fuel management, expense tracking, and time attendance system.",
+  "requestFramePermissions": [
+    "camera",
+    "geolocation"
+  ],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
