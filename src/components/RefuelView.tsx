@@ -21,6 +21,7 @@ import {
   Image as ImageIcon 
 } from 'lucide-react';
 import { RefuelStatus, HeavyMachinery, ExpenseRecord } from '../types';
+import { sendLineFuelNotification } from '../utils/lineNotify';
 
 interface RefuelViewProps {
   refuels: RefuelStatus[];
@@ -81,15 +82,22 @@ export default function RefuelView({ refuels, machinery, onAddRefuel, onUpdateRe
     };
 
     onAddRefuel(newReq);
+    sendLineFuelNotification(newReq, machinery).catch(err => {
+      console.error("Error sending LINE notification for fuel request:", err);
+    });
     setSelectedRefuelId(newReq.id);
     setShowReqForm(false);
   };
 
   // State workflow change: Approve requests to fill
   const handleApprovalChange = (ticket: RefuelStatus, approved: boolean) => {
-    onUpdateRefuel({
+    const updatedTicket: RefuelStatus = {
       ...ticket,
       status: approved ? 'approved_to_fill' : 'cancelled'
+    };
+    onUpdateRefuel(updatedTicket);
+    sendLineFuelNotification(updatedTicket, machinery).catch(err => {
+      console.error("Error sending LINE notification for fuel approval status:", err);
     });
   };
 
@@ -114,6 +122,9 @@ export default function RefuelView({ refuels, machinery, onAddRefuel, onUpdateRe
     };
 
     onUpdateRefuel(updatedTicket);
+    sendLineFuelNotification(updatedTicket, machinery).catch(err => {
+      console.error("Error sending LINE notification for fuel execution completion:", err);
+    });
 
     // Automatically trigger Expense record log summation
     const newExpense: ExpenseRecord = {

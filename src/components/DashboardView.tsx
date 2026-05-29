@@ -146,7 +146,10 @@ export default function DashboardView({ machinery, expenses, refuels, stocks, ta
       const hoursRemaining = nextDue - m.hourMeter;
       const daysRemaining = Math.floor(hoursRemaining / dailyHours);
       return { ...m, nextDue, hoursRemaining, daysRemaining };
-    }).filter(m => m.daysRemaining <= 15).sort((a,b) => a.daysRemaining - b.daysRemaining);
+    }).filter(m => m.daysRemaining <= 15 || m.hoursRemaining <= 50).sort((a,b) => {
+      // Prioritize smaller hours remaining
+      return a.hoursRemaining - b.hoursRemaining;
+    });
   }, [machinery]);
 
   return (
@@ -266,30 +269,52 @@ export default function DashboardView({ machinery, expenses, refuels, stocks, ta
             <h3 className="font-display font-semibold text-stone-800 text-sm">เครื่องจักรใกล้ถึงกำหนด PM (Maintenance Due Soon)</h3>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-            {pmDueMachines.map(m => (
-              <div key={m.id} className="bg-white border border-amber-100 rounded-2xl p-4 shadow-sm hover:shadow-md transition-shadow relative overflow-hidden group">
-                <div className="absolute top-0 right-0 w-24 h-24 bg-amber-50 rounded-full blur-2xl -mr-8 -mt-8"></div>
-                <div className="relative">
-                  <div className="flex items-start justify-between">
-                    <div>
-                      <p className="font-bold text-stone-800">{m.code}</p>
-                      <p className="text-[10px] text-stone-500">{m.brand} {m.model}</p>
+            {pmDueMachines.map(m => {
+              const isUrgentPM = m.hoursRemaining <= 50;
+              return (
+                <div 
+                  key={m.id} 
+                  className={`relative overflow-hidden group rounded-2xl p-4 shadow-sm hover:shadow-md transition-all ${
+                    isUrgentPM
+                      ? 'bg-rose-50/70 border-2 border-rose-500 shadow-sm animate-pulse'
+                      : 'bg-white border border-amber-100'
+                  }`}
+                >
+                  <div className={`absolute top-0 right-0 w-24 h-24 rounded-full blur-2xl -mr-8 -mt-8 ${isUrgentPM ? 'bg-rose-100/50' : 'bg-amber-50'}`}></div>
+                  <div className="relative">
+                    <div className="flex items-start justify-between">
+                      <div>
+                        <div className="flex items-center gap-1.5">
+                          <p className="font-bold text-stone-800">{m.code}</p>
+                          {isUrgentPM && (
+                            <span className="bg-red-500 text-white text-[8px] font-bold px-1.5 py-0.5 rounded-full">
+                              วิกฤต PM 🚨
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-[10px] text-stone-500">{m.brand} {m.model}</p>
+                      </div>
+                      <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded border ${
+                        isUrgentPM 
+                          ? 'bg-rose-600 text-white border-rose-700' 
+                          : 'bg-amber-100 text-amber-700 border-amber-200'
+                      }`}>
+                        PM {m.nextDue}h
+                      </span>
                     </div>
-                    <span className="bg-amber-100 text-amber-700 text-[9px] font-bold px-1.5 py-0.5 rounded border border-amber-200">
-                      PM {m.nextDue}h
-                    </span>
-                  </div>
-                  <div className="mt-4 pt-3 border-t border-stone-100 flex items-end justify-between">
-                    <div>
-                      <p className="text-[10px] text-stone-500 mb-0.5">อีกประมาณ (1 วัน = 8 ชม.)</p>
-                      <p className="text-sm font-bold text-amber-600">
-                        {m.daysRemaining <= 0 ? 'ครบกำหนดแล้ว!' : `${m.daysRemaining} วัน`}
-                      </p>
+                    <div className="mt-4 pt-3 border-t border-stone-100 flex items-end justify-between">
+                      <div>
+                        <p className="text-[10px] text-stone-500 mb-0.5">เหลือเวลาเดินเครื่องยนต์</p>
+                        <p className={`text-sm font-bold ${isUrgentPM ? 'text-rose-600 font-extrabold' : 'text-amber-600'}`}>
+                          {m.hoursRemaining <= 0 ? 'ล่วงเลยกำหนดแล้ว!' : `${m.hoursRemaining} ชม.`}
+                        </p>
+                        <p className="text-[9px] text-stone-400">({m.daysRemaining <= 0 ? 'ชั่วโมงงานล้น' : `ประมาณ ${m.daysRemaining} วันประเมิน`})</p>
+                      </div>
                     </div>
                   </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
       )}

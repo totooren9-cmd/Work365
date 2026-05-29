@@ -24,7 +24,7 @@ import {
 
 // Import Views
 import DashboardView from './components/DashboardView';
-import { sendLineTaskNotification, sendLineRepairNotification } from './utils/lineNotify';
+import { sendLineTaskNotification, sendLineRepairNotification, sendLineAttendanceNotification, sendLineExpenseNotification } from './utils/lineNotify';
 import WorkScheduleView from './components/WorkScheduleView';
 import RepairView from './components/RepairView';
 import InventoryView from './components/InventoryView';
@@ -59,6 +59,27 @@ import {
   ExpenseRecord 
 } from './types';
 import { syncManager } from './syncManager';
+import {
+  getMachinery,
+  saveMachinery,
+  getTasks,
+  saveTask,
+  deleteTask,
+  getStock,
+  saveStockItem,
+  getIssuances,
+  saveIssuance,
+  getAttendances,
+  saveAttendance,
+  getRepairs,
+  saveRepair,
+  deleteRepair,
+  getRefuels,
+  saveRefuel,
+  getExpenses,
+  saveExpense,
+  deleteExpense
+} from './supabaseService';
 import { Html5QrcodeScanner } from 'html5-qrcode';
 import { QrCode, Cloud, CloudOff, RefreshCw } from 'lucide-react';
 
@@ -164,6 +185,75 @@ export default function App() {
   const [refuels, setRefuels] = useState<RefuelStatus[]>(INITIAL_REFUELS);
   const [expenses, setExpenses] = useState<ExpenseRecord[]>(INITIAL_EXPENSES);
 
+  // Supabase Loading status
+  const [dbLoading, setDbLoading] = useState(true);
+
+  // Check all machines for PM alert (< 50 hours remaining in cycle)
+  const checkAllMachinesPm = (machList: HeavyMachinery[]) => {
+    machList.forEach(m => {
+      const cycle = 250;
+      const nextDue = Math.ceil((m.hourMeter + 1) / cycle) * cycle;
+      const hoursRemaining = nextDue - m.hourMeter;
+      if (hoursRemaining > 0 && hoursRemaining <= 50) {
+        const alertKey = `flowwork_pm_alert_${m.id}_${nextDue}`;
+        if (!localStorage.getItem(alertKey)) {
+          localStorage.setItem(alertKey, 'sent');
+          import('./utils/lineNotify').then(({ sendLinePmNotification }) => {
+            sendLinePmNotification(m, nextDue, hoursRemaining).catch(err => {
+              console.error("Error sending LINE Notification for PM:", err);
+            });
+          });
+        }
+      }
+    });
+  };
+
+  // Seed / Sync and Load from Supabase on initiation
+  useEffect(() => {
+    async function initSupabaseData() {
+      try {
+        setDbLoading(true);
+        const [loadedMach, loadedTasks, loadedStocks, loadedAttendances, loadedRepairs, loadedExpenses] = await Promise.all([
+          getMachinery(),
+          getTasks(),
+          getStock(),
+          getAttendances(),
+          getRepairs(),
+          getExpenses()
+        ]);
+
+        setMachinery(loadedMach || INITIAL_MACHINERY);
+        setTasks(loadedTasks || INITIAL_TASKS);
+        setStocks(loadedStocks || INITIAL_STOCK);
+        setAttendances(loadedAttendances || INITIAL_ATTENDANCE_LOGS);
+        setRepairs(loadedRepairs || INITIAL_REPAIRS);
+        setExpenses(loadedExpenses || INITIAL_EXPENSES);
+
+        const loadedIssuances = await getIssuances(loadedStocks || INITIAL_STOCK);
+        const loadedRefuels = await getRefuels(loadedMach || INITIAL_MACHINERY);
+
+        setIssuances(loadedIssuances || INITIAL_ISSUANCES);
+        setRefuels(loadedRefuels || INITIAL_REFUELS);
+
+        if (loadedMach && loadedMach.length > 0) {
+          checkAllMachinesPm(loadedMach);
+        }
+      } catch (err) {
+        console.error("Error loading data from Supabase database tables:", err);
+      } finally {
+        setDbLoading(false);
+      }
+    }
+    initSupabaseData();
+  }, []);
+
+  // Auto trigger alarm checks when machinery is updated
+  useEffect(() => {
+    if (machinery && machinery.length > 0) {
+      checkAllMachinesPm(machinery);
+    }
+  }, [machinery]);
+
   // Clock state
   const [time, setTime] = useState(new Date());
   
@@ -231,6 +321,7 @@ export default function App() {
   // Sync state helpers
   const handleAddTask = (task: WorkScheduleTask) => {
     setTasks(prev => [task, ...prev]);
+    saveTask(task).catch(err => console.warn("Supabase task save error:", err));
     // Send automated LINE notification
     sendLineTaskNotification(task, machinery).catch(err => {
       console.error("Error sending automatic LINE alert for task:", err);
@@ -239,40 +330,64 @@ export default function App() {
 
   const handleUpdateTask = (updatedTask: WorkScheduleTask) => {
     setTasks(prev => prev.map(t => t.id === updatedTask.id ? updatedTask : t));
+    saveTask(updatedTask).catch(err => console.warn("Supabase task update error:", err));
   };
 
   const handleDeleteTask = (id: string) => {
     setTasks(prev => prev.filter(t => t.id !== id));
+    deleteTask(id).catch(err => console.warn("Supabase task delete error:", err));
   };
 
   const handleAddStock = (item: StockItem) => {
     setStocks(prev => [item, ...prev]);
+    saveStockItem(item).catch(err => console.warn("Supabase stock add error:", err));
   };
 
   const handleAddIssuance = (issue: InventoryIssuance) => {
     setIssuances(prev => [issue, ...prev]);
+    saveIssuance(issue).catch(err => console.warn("Supabase issuance add error:", err));
   };
 
   const handleUpdateIssuance = (updatedIssue: InventoryIssuance) => {
     setIssuances(prev => prev.map(i => i.id === updatedIssue.id ? updatedIssue : i));
+    saveIssuance(updatedIssue).catch(err => console.warn("Supabase issuance update error:", err));
   };
 
   const handleUpdateStockQty = (id: string, newQty: number) => {
-    setStocks(prev => prev.map(s => s.id === id ? { ...s, quantity: newQty } : s));
+    setStocks(prev => {
+      const match = prev.find(s => s.id === id);
+      if (match) {
+        const updated = { ...match, quantity: newQty };
+        saveStockItem(updated).catch(err => console.warn("Supabase stock update qty error:", err));
+      }
+      return prev.map(s => s.id === id ? { ...s, quantity: newQty } : s);
+    });
   };
 
   const handleAddMachinery = (mach: HeavyMachinery) => {
     setMachinery(prev => [mach, ...prev]);
+    saveMachinery(mach).catch(err => console.warn("Supabase machinery add error:", err));
   };
 
   const handleUpdateMachinery = (updatedMach: HeavyMachinery) => {
     setMachinery(prev => prev.map(m => m.id === updatedMach.id ? updatedMach : m));
+    saveMachinery(updatedMach).catch(err => console.warn("Supabase machinery update error:", err));
   };
 
   const handleAddRepair = (rep: RepairRequest) => {
     setRepairs(prev => [rep, ...prev]);
+    saveRepair(rep).catch(err => console.warn("Supabase repair add error:", err));
+    
     // Set machinery status under repair instantly
-    setMachinery(prev => prev.map(m => m.id === rep.machineryId ? { ...m, status: 'under_repair' } : m));
+    setMachinery(prev => {
+      const matched = prev.find(m => m.id === rep.machineryId);
+      if (matched) {
+        const updated = { ...matched, status: 'under_repair' as const };
+        saveMachinery(updated).catch(err => console.error(err));
+      }
+      return prev.map(m => m.id === rep.machineryId ? { ...m, status: 'under_repair' as const } : m);
+    });
+
     // Send automated LINE notification
     sendLineRepairNotification(rep, machinery).catch(err => {
       console.error("Error sending automatic LINE alert for repair:", err);
@@ -281,38 +396,63 @@ export default function App() {
 
   const handleUpdateRepair = (updatedRep: RepairRequest) => {
     setRepairs(prev => prev.map(r => r.id === updatedRep.id ? updatedRep : r));
+    saveRepair(updatedRep).catch(err => console.warn("Supabase repair update error:", err));
+    
     // If completed transition machinery back
     if (updatedRep.status === 'completed') {
-      setMachinery(prev => prev.map(m => m.id === updatedRep.machineryId ? { ...m, status: 'active' } : m));
+      setMachinery(prev => {
+        const matched = prev.find(m => m.id === updatedRep.machineryId);
+        if (matched) {
+          const updated = { ...matched, status: 'active' as const };
+          saveMachinery(updated).catch(err => console.error(err));
+        }
+        return prev.map(m => m.id === updatedRep.machineryId ? { ...m, status: 'active' as const } : m);
+      });
     }
   };
 
   const handleDeleteRepair = (id: string) => {
     setRepairs(prev => prev.filter(r => r.id !== id));
+    deleteRepair(id).catch(err => console.warn("Supabase repair delete error:", err));
   };
 
   const handleAddRefuel = (ref: RefuelStatus) => {
     setRefuels(prev => [ref, ...prev]);
+    saveRefuel(ref).catch(err => console.warn("Supabase refuel add error:", err));
   };
 
   const handleUpdateRefuel = (updatedRef: RefuelStatus) => {
     setRefuels(prev => prev.map(r => r.id === updatedRef.id ? updatedRef : r));
+    saveRefuel(updatedRef).catch(err => console.warn("Supabase refuel update error:", err));
   };
 
   const handleAddExpense = (exp: ExpenseRecord) => {
     setExpenses(prev => [exp, ...prev]);
+    saveExpense(exp).catch(err => console.warn("Supabase expense add error:", err));
+    sendLineExpenseNotification(exp).catch(err => {
+      console.error("Error sending LINE notification for expense:", err);
+    });
   };
 
   const handleDeleteExpense = (id: string) => {
     setExpenses(prev => prev.filter(e => e.id !== id));
+    deleteExpense(id).catch(err => console.warn("Supabase expense delete error:", err));
   };
 
   const handleAddAttendance = (log: AttendanceLog) => {
     setAttendances(prev => [log, ...prev]);
+    saveAttendance(log).catch(err => console.warn("Supabase attendance add error:", err));
+    sendLineAttendanceNotification(log).catch(err => {
+      console.error("Error sending LINE notification for attendance check-in:", err);
+    });
   };
 
   const handleUpdateAttendance = (updatedLog: AttendanceLog) => {
     setAttendances(prev => prev.map(a => a.id === updatedLog.id ? updatedLog : a));
+    saveAttendance(updatedLog).catch(err => console.warn("Supabase attendance update error:", err));
+    sendLineAttendanceNotification(updatedLog).catch(err => {
+      console.error("Error sending LINE notification for attendance check-out:", err);
+    });
   };
 
   // Nav items definition

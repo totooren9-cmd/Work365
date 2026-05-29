@@ -19,6 +19,7 @@ import {
   ArrowRight
 } from 'lucide-react';
 import { StockItem, InventoryIssuance } from '../types';
+import { sendLineIssuanceNotification, sendLineStockReceiveNotification } from '../utils/lineNotify';
 
 interface InventoryViewProps {
   stocks: StockItem[];
@@ -34,7 +35,27 @@ export default function InventoryView({ stocks, issuances, onAddStock, onAddIssu
   const [selectedCategory, setSelectedCategory] = useState('all');
   const [showAddStockForm, setShowAddStockForm] = useState(false);
   const [showIssueForm, setShowIssueForm] = useState(false);
-  const [selectedIssuanceId, setSelectedIssuanceId] = useState<string | null>(issuances[0]?.id || null);
+  const [selectedIssuanceId, setSelectedIssuanceId] = useState<string | null>(null);
+
+  const pendingIssuances = useMemo(() => {
+    return issuances.filter(i => i.status === 'pending');
+  }, [issuances]);
+
+  const resolvedIssuances = useMemo(() => {
+    return issuances.filter(i => i.status === 'approved' || i.status === 'rejected');
+  }, [issuances]);
+
+  // Synchronize selection
+  React.useEffect(() => {
+    if (!selectedIssuanceId) {
+      const firstPending = issuances.find(i => i.status === 'pending');
+      if (firstPending) {
+        setSelectedIssuanceId(firstPending.id);
+      } else if (issuances.length > 0) {
+        setSelectedIssuanceId(issuances[0].id);
+      }
+    }
+  }, [issuances, selectedIssuanceId]);
 
   // Form states for adding stock
   const [newStockName, setNewStockName] = useState('');
@@ -93,6 +114,9 @@ export default function InventoryView({ stocks, issuances, onAddStock, onAddIssu
     };
 
     onAddStock(newItem);
+    sendLineStockReceiveNotification(newItem, newItem.quantity, "ใบสั่งซื้อกองพัสดุ / สต็อกตั้งต้นใหม่", "เจ้าหน้าที่ดูแลพัสดุกลาง").catch(err => {
+      console.error("Error sending LINE notification for stock entry:", err);
+    });
     
     // Reset Form
     setNewStockName('');
@@ -123,6 +147,9 @@ export default function InventoryView({ stocks, issuances, onAddStock, onAddIssu
     };
 
     onAddIssuance(newIssue);
+    sendLineIssuanceNotification(newIssue).catch(err => {
+      console.error("Error sending LINE notification for requisition request:", err);
+    });
     setSelectedIssuanceId(newIssue.id);
     setShowIssueForm(false);
   };
@@ -133,10 +160,15 @@ export default function InventoryView({ stocks, issuances, onAddStock, onAddIssu
     if (!targetItem) return;
 
     if (isRejected) {
-      onUpdateIssuance({
+      const updatedReject: InventoryIssuance = {
         ...iss,
         status: 'rejected'
+      };
+      onUpdateIssuance(updatedReject);
+      sendLineIssuanceNotification(updatedReject).catch(err => {
+        console.error("Error sending LINE notification for rejected requisition:", err);
       });
+      setSelectedIssuanceId(null);
       return;
     }
 
@@ -148,11 +180,16 @@ export default function InventoryView({ stocks, issuances, onAddStock, onAddIssu
     }
 
     onUpdateStockQty(targetItem.id, targetItem.quantity - approvedCount);
-    onUpdateIssuance({
+    const updatedApproved: InventoryIssuance = {
       ...iss,
       status: 'approved',
       qtyApproved: approvedCount
+    };
+    onUpdateIssuance(updatedApproved);
+    sendLineIssuanceNotification(updatedApproved).catch(err => {
+      console.error("Error sending LINE notification for approved requisition:", err);
     });
+    setSelectedIssuanceId(null);
   };
 
   // Simulates scanning spare part stickers
@@ -179,7 +216,8 @@ export default function InventoryView({ stocks, issuances, onAddStock, onAddIssu
   };
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-12 gap-6" id="inventory-grid-center">
+    <div className="space-y-6">
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6" id="inventory-grid-center">
       {/* 1. Left Catalog and Issuances Panel (8 Columns) */}
       <div className="lg:col-span-8 bg-stone-50/40 border border-stone-200 rounded-2xl p-5 shadow-sm backdrop-blur-md flex flex-col justify-between">
         <div>
@@ -477,32 +515,43 @@ export default function InventoryView({ stocks, issuances, onAddStock, onAddIssu
           </div>
 
           <div className="space-y-3.5 max-h-[190px] overflow-y-auto pr-1">
-            {issuances.map(iss => (
-              <div 
-                key={iss.id}
-                onClick={() => setSelectedIssuanceId(iss.id)}
-                className={`p-3 rounded-xl border text-[11px] cursor-pointer transition-all ${
-                  iss.id === selectedIssuanceId
-                    ? 'bg-orange-500/10 border-orange-500/50'
-                    : 'bg-white/20 border-slate-900 hover:bg-white/50'
-                }`}
-              >
-                <div className="flex justify-between items-center mb-1">
-                  <span className="font-mono font-bold text-stone-600">{iss.documentNo}</span>
-                  <span className={`px-2 py-0.5 rounded text-[8px] font-black uppercase ${
-                    iss.status === 'approved' ? 'bg-emerald-500/10 text-emerald-300' :
-                    iss.status === 'rejected' ? 'bg-rose-500/10 text-rose-300' :
-                    'bg-amber-500/10 text-amber-300 animate-pulse'
-                  }`}>
-                    {iss.status === 'approved' ? 'อนุมัติจ่าย' : iss.status === 'rejected' ? 'ปฏิเสธ' : 'รออนุมัติ'}
-                  </span>
+            {pendingIssuances.length === 0 ? (
+              <div className="text-center py-8 bg-emerald-50 border border-emerald-200 rounded-2xl p-5 shadow-sm relative overflow-hidden">
+                {/* Glowing moving dot */}
+                <div className="absolute top-2 right-2 flex h-3.5 w-3.5 items-center justify-center">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
                 </div>
-                <div className="text-stone-500 space-y-0.5">
-                  <p>พัสดุ: <strong className="text-stone-800">{iss.itemName}</strong> ({iss.qtyRequested} ชิ้น)</p>
-                  <p>แผนก: {iss.department}</p>
+                <div className="p-2 bg-emerald-500/10 text-emerald-600 rounded-full w-fit mx-auto mb-2 animate-bounce">
+                  <CheckCircle className="w-5 h-5" />
                 </div>
+                <p className="font-bold text-xs text-emerald-800 tracking-tight">ไม่มีรายการสั่งเบิกอะไหล่ค้างอนุมัติในขณะนี้</p>
+                <p className="text-[10px] text-emerald-600/80 mt-1">คลังพัสดุและอะไหล่สะสมสถานะสมดุลและปลอดภัย</p>
               </div>
-            ))}
+            ) : (
+              pendingIssuances.map(iss => (
+                <div 
+                  key={iss.id}
+                  onClick={() => setSelectedIssuanceId(iss.id)}
+                  className={`p-3 rounded-xl border text-[11px] cursor-pointer transition-all ${
+                    iss.id === selectedIssuanceId
+                      ? 'bg-orange-500/10 border-orange-500/50'
+                      : 'bg-white/20 border-stone-200 hover:bg-white/50'
+                  }`}
+                >
+                  <div className="flex justify-between items-center mb-1">
+                    <span className="font-mono font-bold text-stone-600">{iss.documentNo}</span>
+                    <span className="px-2 py-0.5 rounded text-[8px] font-black uppercase bg-amber-500/10 text-amber-600 animate-pulse">
+                      รออนุมัติ
+                    </span>
+                  </div>
+                  <div className="text-stone-500 space-y-0.5">
+                    <p>พัสดุ: <strong className="text-stone-800">{iss.itemName}</strong> ({iss.qtyRequested} ชิ้น)</p>
+                    <p>แผนก: {iss.department}</p>
+                  </div>
+                </div>
+              ))
+            )}
           </div>
 
           {/* Active Drawer Details (Only if pending / selectable) */}
@@ -522,13 +571,13 @@ export default function InventoryView({ stocks, issuances, onAddStock, onAddIssu
                 <div className="grid grid-cols-2 gap-2 pt-2">
                   <button
                     onClick={() => handleApproveRequisition(selectedIssuance, true)}
-                    className="py-2 bg-rose-500/15 hover:bg-rose-600 hover:text-white rounded-lg text-rose-300 font-semibold transition-colors cursor-pointer"
+                    className="py-2 bg-rose-500/15 hover:bg-rose-600 hover:text-white rounded-lg text-rose-500 font-semibold transition-colors cursor-pointer text-center"
                   >
                     X ไม่อนุมัติ
                   </button>
                   <button
                     onClick={() => handleApproveRequisition(selectedIssuance)}
-                    className="py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg font-semibold transition-colors cursor-pointer"
+                    className="py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg font-semibold transition-colors cursor-pointer text-center"
                   >
                     อนุมัติจ่ายคลัง
                   </button>
@@ -536,13 +585,26 @@ export default function InventoryView({ stocks, issuances, onAddStock, onAddIssu
               )}
 
               {selectedIssuance.status === 'approved' && (
-                <button
-                  onClick={() => window.print()}
-                  className="w-full py-2 bg-slate-905 hover:bg-stone-50 text-stone-600 border border-stone-200 rounded-lg font-semibold transition-colors flex items-center justify-center gap-1.5"
-                >
-                  <Printer className="w-3.5 h-3.5" />
-                  สั่งพิมพ์ใบเบิกพัสดุ (Print A4)
-                </button>
+                <div className="space-y-2">
+                  <div className="p-2 bg-emerald-50 border border-emerald-100 rounded-lg font-semibold text-center text-emerald-700 flex items-center justify-center gap-1.5">
+                    <CheckCircle className="w-3.5 h-3.5 text-emerald-500" />
+                    <span>อนุมัติจ่ายคลังเรียบร้อย</span>
+                  </div>
+                  <button
+                    onClick={() => window.print()}
+                    className="w-full py-2 bg-stone-100 hover:bg-stone-200 text-stone-700 border border-stone-200 rounded-lg font-bold transition-colors flex items-center justify-center gap-1.5 cursor-pointer text-[10px]"
+                  >
+                    <Printer className="w-3.5 h-3.5 text-stone-500" />
+                    สั่งพิมพ์ใบเบิกพัสดุ
+                  </button>
+                </div>
+              )}
+
+              {selectedIssuance.status === 'rejected' && (
+                <div className="p-2 bg-rose-50 border border-rose-100 rounded-lg font-semibold text-center text-rose-700 flex items-center justify-center gap-1.5">
+                  <XCircle className="w-3.5 h-3.5 text-rose-500" />
+                  <span>ปฏิเสธการขอเบิกจ่ายคลังแล้ว</span>
+                </div>
               )}
             </div>
           )}
@@ -575,6 +637,147 @@ export default function InventoryView({ stocks, issuances, onAddStock, onAddIssu
               </button>
             </div>
           )}
+        </div>
+      </div>
+    </div>
+
+    {/* Google Sheets Live Requisition Hub */}
+    <div className="bg-white border text-stone-850 border-stone-200 rounded-2xl shadow-sm overflow-hidden" id="google-sheets-requisition-panel">
+        {/* Title and Connected status bar */}
+        <div className="bg-[#107c41] px-4 py-3 text-white flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 border-b border-emerald-700">
+          <div className="flex items-center gap-2">
+            <span className="w-5 h-5 bg-white/20 rounded flex items-center justify-center font-bold text-xs">田</span>
+            <div>
+              <h3 className="text-xs font-bold font-sans tracking-tight text-white">ตารางแสดงรายการประวัติใบเบิกพัสดุอะไหล่สะสม (Google Sheets Sync)</h3>
+            </div>
+          </div>
+          <span className="bg-emerald-800 border border-emerald-600/30 text-emerald-100 text-[9px] font-semibold px-2.5 py-0.5 rounded font-mono animate-pulse">
+            ● Google Sheets Connected
+          </span>
+        </div>
+
+        {/* Spreadsheet Component Layout */}
+        <div className="overflow-x-auto w-full">
+          <table className="min-w-full border-collapse border border-stone-200 font-mono text-[11px] text-stone-700">
+            <thead>
+              {/* Spreadsheet letters A, B, C, D... header row */}
+              <tr className="bg-stone-100 select-none">
+                <th className="w-8 border border-stone-200 bg-stone-200 text-[10px] text-stone-500 text-center py-1 font-sans"></th>
+                <th className="border border-stone-200 text-stone-500 font-sans tracking-tight text-center text-[10px] w-[50px] uppercase">A</th>
+                <th className="border border-stone-200 text-stone-500 font-sans tracking-tight text-center text-[10px] w-[135px] uppercase">B</th>
+                <th className="border border-stone-200 text-stone-500 font-sans tracking-tight text-center text-[10px] w-[95px] uppercase">C</th>
+                <th className="border border-stone-200 text-stone-500 font-sans tracking-tight text-center text-[10px] uppercase">D</th>
+                <th className="border border-stone-200 text-stone-500 font-sans tracking-tight text-center text-[10px] w-[110px] uppercase">E</th>
+                <th className="border border-stone-200 text-stone-500 font-sans tracking-tight text-center text-[10px] w-[110px] uppercase">F</th>
+                <th className="border border-stone-200 text-stone-500 font-sans tracking-tight text-center text-[10px] w-[170px] uppercase">G</th>
+                <th className="border border-stone-200 text-stone-500 font-sans tracking-tight text-center text-[10px] w-[130px] uppercase">H</th>
+                <th className="border border-stone-200 text-stone-500 font-sans tracking-tight text-center text-[10px] w-[120px] uppercase">I</th>
+              </tr>
+
+              {/* Real Table Column Headers representing spreadsheet cell layout */}
+              <tr className="bg-stone-100/80 font-bold select-none text-left">
+                <td className="border border-stone-200 bg-stone-200/50 text-center text-[9px] text-stone-400 font-sans">#</td>
+                <td className="border border-stone-200 px-2 py-1.5 text-stone-600 text-center bg-stone-100">ลำดับ</td>
+                <td className="border border-stone-200 px-2 py-1.5 text-stone-600">เลขที่เอกสาร</td>
+                <td className="border border-stone-200 px-2 py-1.5 text-stone-600 text-center">วันที่ขอ</td>
+                <td className="border border-stone-200 px-2 py-1.5 text-stone-600">รายการพัสดุอะไหล่</td>
+                <td className="border border-stone-200 px-2 py-1.5 text-stone-600 text-right">จำนวนที่ขอ</td>
+                <td className="border border-stone-200 px-2 py-1.5 text-stone-600 text-right">จำนวนจ่ายจริง</td>
+                <td className="border border-stone-200 px-2 py-1.5 text-stone-600">หน่วยสังกัด</td>
+                <td className="border border-stone-200 px-2 py-1.5 text-stone-600">ผู้ขอประสงค์เบิก</td>
+                <td className="border border-stone-200 px-2 py-1.5 text-stone-600 text-center">สถานะการอนุมัติ</td>
+              </tr>
+            </thead>
+            <tbody>
+              {/* Render resolved (approved & rejected) items */}
+              {resolvedIssuances.map((iss, index) => {
+                const isApproved = iss.status === 'approved';
+                // Alternating rows like Google Sheet
+                const rowBg = index % 2 === 0 ? "bg-white" : "bg-[#f3fbf7]";
+                
+                return (
+                  <tr 
+                    key={iss.id} 
+                    onClick={() => setSelectedIssuanceId(iss.id)}
+                    className={`${rowBg} hover:bg-emerald-50 relative group cursor-pointer transition-colors`}
+                  >
+                    <td className="border border-stone-200 bg-stone-100 text-stone-400 text-center select-none font-sans font-semibold">
+                      {index + 1}
+                    </td>
+                    <td className="border border-stone-200 px-2 py-1.5 text-stone-500 text-center">
+                      {index + 1}
+                    </td>
+                    <td className="border border-stone-200 px-2 py-1.5 font-bold text-emerald-850">
+                      {iss.documentNo}
+                    </td>
+                    <td className="border border-stone-200 px-2 py-1.5 text-stone-500 text-center">
+                      {iss.date}
+                    </td>
+                    <td className="border border-stone-200 px-2 py-1.5 text-stone-800 font-semibold">
+                      {iss.itemName}
+                    </td>
+                    <td className="border border-stone-200 px-2 py-1.5 text-stone-600 text-right font-medium">
+                      {iss.qtyRequested}
+                    </td>
+                    <td className="border border-stone-200 px-2 py-1.5 text-right font-bold text-stone-800 bg-[#fbfbfb]">
+                      {iss.qtyApproved}
+                    </td>
+                    <td className="border border-stone-200 px-2 py-1.5 text-stone-500 truncate" title={iss.department}>
+                      {iss.department}
+                    </td>
+                    <td className="border border-stone-200 px-2 py-1.5 text-stone-600 select-all" title={iss.requestedBy}>
+                      {iss.requestedBy}
+                    </td>
+                    <td className="border border-stone-200 px-1 py-1 text-center font-bold">
+                      {isApproved ? (
+                        <span className="inline-block bg-[#e6f4ea] text-[#137333] px-2 py-0.5 rounded text-[9px] uppercase tracking-wider">
+                          🟢 อนุมัติเบิกจ่าย
+                        </span>
+                      ) : (
+                        <span className="inline-block bg-[#fce8e6] text-[#c5221f] px-2 py-0.5 rounded text-[9px] uppercase tracking-wider">
+                          🔴 ปฏิเสธคำขอ
+                        </span>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
+
+              {/* Add blank spreadsheet grid rows for stunning aesthetic realism */}
+              {Array.from({ length: Math.max(2, 6 - resolvedIssuances.length) }).map((_, i) => {
+                const rowIndex = resolvedIssuances.length + i + 1;
+                // Alternating rows blank layout
+                const rowBg = rowIndex % 2 === 0 ? "bg-[#f3fbf7]" : "bg-white";
+                
+                return (
+                  <tr key={`blank-${i}`} className={`${rowBg} select-none font-sans`}>
+                    <td className="border border-stone-200 bg-stone-100 text-[10px] text-stone-400 text-center">
+                      {rowIndex}
+                    </td>
+                    <td className="border border-stone-150 px-2 py-1 text-stone-300 text-center">-</td>
+                    <td className="border border-stone-150 px-2 py-1 text-stone-300">-</td>
+                    <td className="border border-stone-150 px-2 py-1 text-stone-300">-</td>
+                    <td className="border border-stone-150 px-2 py-1 text-stone-300">-</td>
+                    <td className="border border-stone-150 px-2 py-1 text-stone-300">-</td>
+                    <td className="border border-stone-150 px-2 py-1 text-stone-300">-</td>
+                    <td className="border border-stone-150 px-2 py-1 text-stone-300">-</td>
+                    <td className="border border-stone-150 px-2 py-1 text-stone-300">-</td>
+                    <td className="border border-stone-150 px-2 py-1 text-stone-300 text-center">-</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+
+        {/* Google Sheet Simple info bar */}
+        <div className="bg-[#f9f9f9] border-t border-stone-200 px-4 py-2.5 flex justify-between items-center text-[10px] text-stone-500 font-mono">
+          <div>
+            <span>จำนวนใบเบิกทั้งหมด: <strong className="text-stone-850 font-bold">{resolvedIssuances.length}</strong> รายการ</span>
+          </div>
+          <div>
+            <span>พัสดุอะไหล่ตัดคลังจ่ายสะสม: <strong className="text-emerald-700 font-bold">{resolvedIssuances.reduce((sum, item) => sum + item.qtyApproved, 0)}</strong> ชิ้น</span>
+          </div>
         </div>
       </div>
     </div>

@@ -33,6 +33,7 @@ export default function AttendanceView({ attendances, onAddAttendance, onUpdateA
   const [workRole, setWorkRole] = useState('ผู้ควบคุมพวงมาลัยอาวุโส');
   const [workSite, setWorkSite] = useState('ไซต์ก่อสร้างเขื่อนกั้นน้ำปิง');
   const [isOvertime, setIsOvertime] = useState(false);
+  const [photoSim, setPhotoSim] = useState('https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&q=80&w=200');
 
   // GPS coordinates state simulation
   const [gpsSim, setGpsSim] = useState('18.7904, 98.9841 (WiFi-Camp ชลประทานปิง)');
@@ -81,7 +82,7 @@ export default function AttendanceView({ attendances, onAddAttendance, onUpdateA
       checkInTime: formattedTime,
       siteName: workSite,
       isOvertime,
-      photoUrl: 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=crop&q=80&w=150',
+      photoUrl: photoSim,
       gpsLocIn: gpsSim
     };
 
@@ -208,6 +209,64 @@ export default function AttendanceView({ attendances, onAddAttendance, onUpdateA
                     <label htmlFor="form-ot" className="text-xs text-slate-350 ml-2 font-semibold cursor-pointer">
                       ลงเวลาเป็นกะล่วงเวลา (OT)
                     </label>
+                  </div>
+                </div>
+
+                {/* Simulated Photo Capture Widget */}
+                <div className="space-y-2 pt-2 border-t border-stone-200">
+                  <div className="flex items-center justify-between">
+                    <span className="block text-[10px] text-stone-500 uppercase font-bold text-orange-600">🤳 ถ่ายรูปใบหน้ายืนยันตัวตน (Face Selfie Capture)</span>
+                    <span className="text-[9px] text-stone-400 font-mono">สถานะกล้องสแกนใบหน้า: พร้อมใช้งาน (Active)</span>
+                  </div>
+                  
+                  <div className="grid grid-cols-1 md:grid-cols-4 gap-4 items-center bg-stone-50 p-3 rounded-2xl border border-stone-200">
+                    <div className="md:col-span-1 flex flex-col items-center">
+                      <div className="w-16 h-16 rounded-full border-2 border-orange-500 overflow-hidden shadow-sm shrink-0">
+                        <img src={photoSim} alt="Selfie capture preset" className="w-full h-full object-cover" />
+                      </div>
+                      <span className="text-[8px] bg-orange-100 text-orange-700 px-1.5 py-0.5 rounded font-bold mt-1.5 uppercase">เตรียมระบุส่ง</span>
+                    </div>
+
+                    <div className="md:col-span-3 space-y-1.5">
+                      <p className="text-[10px] text-stone-500 font-semibold mb-1">เลือกบุคคลถ่ายภาพเช็คชื่อด่วน (หรือกรอกรูปภาพพนักงานจริง):</p>
+                      
+                      {/* Avatar Preset Buttons */}
+                      <div className="flex flex-wrap gap-1.5 mb-2">
+                        {[
+                          { name: 'ช่างวิรัช', url: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&q=80&w=200', role: 'ผู้ควบคุมพวงมาลัยอาวุโส' },
+                          { name: 'ช่างสมบัติ', url: 'https://images.unsplash.com/photo-1628157582853-a796fa650a6a?auto=format&fit=crop&q=80&w=200', role: 'ช่างไฟฟ้ากำลังอาวุโส' },
+                          { name: 'ช่างอำนวย', url: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&q=80&w=200', role: 'พนักงานขับรถแบ็คโฮมือหนึ่ง' },
+                          { name: 'คุณนารี', url: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&q=80&w=200', role: 'เจ้าหน้าที่ความปลอดภัย (จป.)' }
+                        ].map(preset => (
+                          <button
+                            key={preset.name}
+                            type="button"
+                            onClick={() => {
+                              setPhotoSim(preset.url);
+                              setWorkName(preset.name + ' ทองแท้');
+                              setWorkRole(preset.role);
+                            }}
+                            className={`px-2 py-1 rounded text-[10px] transition-colors border ${
+                              photoSim === preset.url
+                                ? 'bg-orange-500 text-white border-orange-600'
+                                : 'bg-white text-stone-600 border-stone-200 hover:bg-stone-100'
+                            }`}
+                          >
+                            👤 {preset.name}
+                          </button>
+                        ))}
+                      </div>
+
+                      <div>
+                        <label className="block text-[9px] text-stone-400 font-bold">ระบุลิงก์รูปภาพถ่ายเซลฟี่ (Custom Photo URL)</label>
+                        <input
+                          type="text"
+                          className="w-full bg-white border border-stone-200 rounded-lg px-2 py-1 text-stone-700 outline-none text-[10px] mt-0.5 focus:border-orange-500 font-mono"
+                          value={photoSim}
+                          onChange={(e) => setPhotoSim(e.target.value)}
+                        />
+                      </div>
+                    </div>
                   </div>
                 </div>
 
