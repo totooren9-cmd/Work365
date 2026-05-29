@@ -81,7 +81,53 @@ import {
   deleteExpense
 } from './supabaseService';
 import { Html5QrcodeScanner } from 'html5-qrcode';
+import { toUUID } from './utils/uuid';
 import { QrCode, Cloud, CloudOff, RefreshCw } from 'lucide-react';
+
+const APPS_INITIAL_MACHINERY = INITIAL_MACHINERY.map(m => ({
+  ...m,
+  id: toUUID(m.id)
+}));
+
+const APPS_INITIAL_TASKS = INITIAL_TASKS.map(t => ({
+  ...t,
+  id: toUUID(t.id),
+  machineryId: t.machineryId ? toUUID(t.machineryId) : undefined
+}));
+
+const APPS_INITIAL_STOCK = INITIAL_STOCK.map(s => ({
+  ...s,
+  id: toUUID(s.id)
+}));
+
+const APPS_INITIAL_ISSUANCES = INITIAL_ISSUANCES.map(i => ({
+  ...i,
+  id: toUUID(i.id),
+  itemId: toUUID(i.itemId)
+}));
+
+const APPS_INITIAL_ATTENDANCE_LOGS = INITIAL_ATTENDANCE_LOGS.map(a => ({
+  ...a,
+  id: toUUID(a.id)
+}));
+
+const APPS_INITIAL_REPAIRS = INITIAL_REPAIRS.map(r => ({
+  ...r,
+  id: toUUID(r.id),
+  machineryId: toUUID(r.machineryId)
+}));
+
+const APPS_INITIAL_REFUELS = INITIAL_REFUELS.map(rf => ({
+  ...rf,
+  id: toUUID(rf.id),
+  machineryId: toUUID(rf.machineryId)
+}));
+
+const APPS_INITIAL_EXPENSES = INITIAL_EXPENSES.map(e => ({
+  ...e,
+  id: toUUID(e.id),
+  machineryId: e.machineryId ? toUUID(e.machineryId) : undefined
+}));
 
 export default function App() {
   // Theme state (yellow, blue, green, white - soft premium tones)
@@ -176,14 +222,14 @@ export default function App() {
   };
 
   // Core global shared list state
-  const [machinery, setMachinery] = useState<HeavyMachinery[]>(INITIAL_MACHINERY);
-  const [tasks, setTasks] = useState<WorkScheduleTask[]>(INITIAL_TASKS);
-  const [stocks, setStocks] = useState<StockItem[]>(INITIAL_STOCK);
-  const [issuances, setIssuances] = useState<InventoryIssuance[]>(INITIAL_ISSUANCES);
-  const [attendances, setAttendances] = useState<AttendanceLog[]>(INITIAL_ATTENDANCE_LOGS);
-  const [repairs, setRepairs] = useState<RepairRequest[]>(INITIAL_REPAIRS);
-  const [refuels, setRefuels] = useState<RefuelStatus[]>(INITIAL_REFUELS);
-  const [expenses, setExpenses] = useState<ExpenseRecord[]>(INITIAL_EXPENSES);
+  const [machinery, setMachinery] = useState<HeavyMachinery[]>(APPS_INITIAL_MACHINERY);
+  const [tasks, setTasks] = useState<WorkScheduleTask[]>(APPS_INITIAL_TASKS);
+  const [stocks, setStocks] = useState<StockItem[]>(APPS_INITIAL_STOCK);
+  const [issuances, setIssuances] = useState<InventoryIssuance[]>(APPS_INITIAL_ISSUANCES);
+  const [attendances, setAttendances] = useState<AttendanceLog[]>(APPS_INITIAL_ATTENDANCE_LOGS);
+  const [repairs, setRepairs] = useState<RepairRequest[]>(APPS_INITIAL_REPAIRS);
+  const [refuels, setRefuels] = useState<RefuelStatus[]>(APPS_INITIAL_REFUELS);
+  const [expenses, setExpenses] = useState<ExpenseRecord[]>(APPS_INITIAL_EXPENSES);
 
   // Supabase Loading status
   const [dbLoading, setDbLoading] = useState(true);
@@ -320,137 +366,206 @@ export default function App() {
 
   // Sync state helpers
   const handleAddTask = (task: WorkScheduleTask) => {
-    setTasks(prev => [task, ...prev]);
-    saveTask(task).catch(err => console.warn("Supabase task save error:", err));
+    const cleanTask = {
+      ...task,
+      id: toUUID(task.id),
+      machineryId: task.machineryId ? toUUID(task.machineryId) : undefined
+    };
+    setTasks(prev => [cleanTask, ...prev]);
+    saveTask(cleanTask).catch(err => console.warn("Supabase task save error:", err));
     // Send automated LINE notification
-    sendLineTaskNotification(task, machinery).catch(err => {
+    sendLineTaskNotification(cleanTask, machinery).catch(err => {
       console.error("Error sending automatic LINE alert for task:", err);
     });
   };
 
   const handleUpdateTask = (updatedTask: WorkScheduleTask) => {
-    setTasks(prev => prev.map(t => t.id === updatedTask.id ? updatedTask : t));
-    saveTask(updatedTask).catch(err => console.warn("Supabase task update error:", err));
+    const cleanTask = {
+      ...updatedTask,
+      id: toUUID(updatedTask.id),
+      machineryId: updatedTask.machineryId ? toUUID(updatedTask.machineryId) : undefined
+    };
+    setTasks(prev => prev.map(t => t.id === cleanTask.id ? cleanTask : t));
+    saveTask(cleanTask).catch(err => console.warn("Supabase task update error:", err));
   };
 
   const handleDeleteTask = (id: string) => {
-    setTasks(prev => prev.filter(t => t.id !== id));
-    deleteTask(id).catch(err => console.warn("Supabase task delete error:", err));
+    const uuid = toUUID(id);
+    setTasks(prev => prev.filter(t => t.id !== uuid));
+    deleteTask(uuid).catch(err => console.warn("Supabase task delete error:", err));
   };
 
   const handleAddStock = (item: StockItem) => {
-    setStocks(prev => [item, ...prev]);
-    saveStockItem(item).catch(err => console.warn("Supabase stock add error:", err));
+    const cleanItem = {
+      ...item,
+      id: toUUID(item.id)
+    };
+    setStocks(prev => [cleanItem, ...prev]);
+    saveStockItem(cleanItem).catch(err => console.warn("Supabase stock add error:", err));
   };
 
   const handleAddIssuance = (issue: InventoryIssuance) => {
-    setIssuances(prev => [issue, ...prev]);
-    saveIssuance(issue).catch(err => console.warn("Supabase issuance add error:", err));
+    const cleanIssue = {
+      ...issue,
+      id: toUUID(issue.id),
+      itemId: toUUID(issue.itemId)
+    };
+    setIssuances(prev => [cleanIssue, ...prev]);
+    saveIssuance(cleanIssue).catch(err => console.warn("Supabase issuance add error:", err));
   };
 
   const handleUpdateIssuance = (updatedIssue: InventoryIssuance) => {
-    setIssuances(prev => prev.map(i => i.id === updatedIssue.id ? updatedIssue : i));
-    saveIssuance(updatedIssue).catch(err => console.warn("Supabase issuance update error:", err));
+    const cleanIssue = {
+      ...updatedIssue,
+      id: toUUID(updatedIssue.id),
+      itemId: toUUID(updatedIssue.itemId)
+    };
+    setIssuances(prev => prev.map(i => i.id === cleanIssue.id ? cleanIssue : i));
+    saveIssuance(cleanIssue).catch(err => console.warn("Supabase issuance update error:", err));
   };
 
   const handleUpdateStockQty = (id: string, newQty: number) => {
+    const uuid = toUUID(id);
     setStocks(prev => {
-      const match = prev.find(s => s.id === id);
+      const match = prev.find(s => s.id === uuid);
       if (match) {
         const updated = { ...match, quantity: newQty };
         saveStockItem(updated).catch(err => console.warn("Supabase stock update qty error:", err));
       }
-      return prev.map(s => s.id === id ? { ...s, quantity: newQty } : s);
+      return prev.map(s => s.id === uuid ? { ...s, quantity: newQty } : s);
     });
   };
 
   const handleAddMachinery = (mach: HeavyMachinery) => {
-    setMachinery(prev => [mach, ...prev]);
-    saveMachinery(mach).catch(err => console.warn("Supabase machinery add error:", err));
+    const cleanMach = {
+      ...mach,
+      id: toUUID(mach.id)
+    };
+    setMachinery(prev => [cleanMach, ...prev]);
+    saveMachinery(cleanMach).catch(err => console.warn("Supabase machinery add error:", err));
   };
 
   const handleUpdateMachinery = (updatedMach: HeavyMachinery) => {
-    setMachinery(prev => prev.map(m => m.id === updatedMach.id ? updatedMach : m));
-    saveMachinery(updatedMach).catch(err => console.warn("Supabase machinery update error:", err));
+    const cleanMach = {
+      ...updatedMach,
+      id: toUUID(updatedMach.id)
+    };
+    setMachinery(prev => prev.map(m => m.id === cleanMach.id ? cleanMach : m));
+    saveMachinery(cleanMach).catch(err => console.warn("Supabase machinery update error:", err));
   };
 
   const handleAddRepair = (rep: RepairRequest) => {
-    setRepairs(prev => [rep, ...prev]);
-    saveRepair(rep).catch(err => console.warn("Supabase repair add error:", err));
+    const cleanRep = {
+      ...rep,
+      id: toUUID(rep.id),
+      machineryId: toUUID(rep.machineryId)
+    };
+    setRepairs(prev => [cleanRep, ...prev]);
+    saveRepair(cleanRep).catch(err => console.warn("Supabase repair add error:", err));
     
     // Set machinery status under repair instantly
     setMachinery(prev => {
-      const matched = prev.find(m => m.id === rep.machineryId);
+      const matched = prev.find(m => m.id === cleanRep.machineryId);
       if (matched) {
         const updated = { ...matched, status: 'under_repair' as const };
         saveMachinery(updated).catch(err => console.error(err));
       }
-      return prev.map(m => m.id === rep.machineryId ? { ...m, status: 'under_repair' as const } : m);
+      return prev.map(m => m.id === cleanRep.machineryId ? { ...m, status: 'under_repair' as const } : m);
     });
 
     // Send automated LINE notification
-    sendLineRepairNotification(rep, machinery).catch(err => {
+    sendLineRepairNotification(cleanRep, machinery).catch(err => {
       console.error("Error sending automatic LINE alert for repair:", err);
     });
   };
 
   const handleUpdateRepair = (updatedRep: RepairRequest) => {
-    setRepairs(prev => prev.map(r => r.id === updatedRep.id ? updatedRep : r));
-    saveRepair(updatedRep).catch(err => console.warn("Supabase repair update error:", err));
+    const cleanRep = {
+      ...updatedRep,
+      id: toUUID(updatedRep.id),
+      machineryId: toUUID(updatedRep.machineryId)
+    };
+    setRepairs(prev => prev.map(r => r.id === cleanRep.id ? cleanRep : r));
+    saveRepair(cleanRep).catch(err => console.warn("Supabase repair update error:", err));
     
     // If completed transition machinery back
-    if (updatedRep.status === 'completed') {
+    if (cleanRep.status === 'completed') {
       setMachinery(prev => {
-        const matched = prev.find(m => m.id === updatedRep.machineryId);
+        const matched = prev.find(m => m.id === cleanRep.machineryId);
         if (matched) {
           const updated = { ...matched, status: 'active' as const };
           saveMachinery(updated).catch(err => console.error(err));
         }
-        return prev.map(m => m.id === updatedRep.machineryId ? { ...m, status: 'active' as const } : m);
+        return prev.map(m => m.id === cleanRep.machineryId ? { ...m, status: 'active' as const } : m);
       });
     }
   };
 
   const handleDeleteRepair = (id: string) => {
-    setRepairs(prev => prev.filter(r => r.id !== id));
-    deleteRepair(id).catch(err => console.warn("Supabase repair delete error:", err));
+    const uuid = toUUID(id);
+    setRepairs(prev => prev.filter(r => r.id !== uuid));
+    deleteRepair(uuid).catch(err => console.warn("Supabase repair delete error:", err));
   };
 
   const handleAddRefuel = (ref: RefuelStatus) => {
-    setRefuels(prev => [ref, ...prev]);
-    saveRefuel(ref).catch(err => console.warn("Supabase refuel add error:", err));
+    const cleanRef = {
+      ...ref,
+      id: toUUID(ref.id),
+      machineryId: toUUID(ref.machineryId)
+    };
+    setRefuels(prev => [cleanRef, ...prev]);
+    saveRefuel(cleanRef).catch(err => console.warn("Supabase refuel add error:", err));
   };
 
   const handleUpdateRefuel = (updatedRef: RefuelStatus) => {
-    setRefuels(prev => prev.map(r => r.id === updatedRef.id ? updatedRef : r));
-    saveRefuel(updatedRef).catch(err => console.warn("Supabase refuel update error:", err));
+    const cleanRef = {
+      ...updatedRef,
+      id: toUUID(updatedRef.id),
+      machineryId: toUUID(updatedRef.machineryId)
+    };
+    setRefuels(prev => prev.map(r => r.id === cleanRef.id ? cleanRef : r));
+    saveRefuel(cleanRef).catch(err => console.warn("Supabase refuel update error:", err));
   };
 
   const handleAddExpense = (exp: ExpenseRecord) => {
-    setExpenses(prev => [exp, ...prev]);
-    saveExpense(exp).catch(err => console.warn("Supabase expense add error:", err));
-    sendLineExpenseNotification(exp).catch(err => {
+    const cleanExp = {
+      ...exp,
+      id: toUUID(exp.id),
+      machineryId: exp.machineryId ? toUUID(exp.machineryId) : undefined
+    };
+    setExpenses(prev => [cleanExp, ...prev]);
+    saveExpense(cleanExp).catch(err => console.warn("Supabase expense add error:", err));
+    sendLineExpenseNotification(cleanExp).catch(err => {
       console.error("Error sending LINE notification for expense:", err);
     });
   };
 
   const handleDeleteExpense = (id: string) => {
-    setExpenses(prev => prev.filter(e => e.id !== id));
-    deleteExpense(id).catch(err => console.warn("Supabase expense delete error:", err));
+    const uuid = toUUID(id);
+    setExpenses(prev => prev.filter(e => e.id !== uuid));
+    deleteExpense(uuid).catch(err => console.warn("Supabase expense delete error:", err));
   };
 
   const handleAddAttendance = (log: AttendanceLog) => {
-    setAttendances(prev => [log, ...prev]);
-    saveAttendance(log).catch(err => console.warn("Supabase attendance add error:", err));
-    sendLineAttendanceNotification(log).catch(err => {
+    const cleanLog = {
+      ...log,
+      id: toUUID(log.id)
+    };
+    setAttendances(prev => [cleanLog, ...prev]);
+    saveAttendance(cleanLog).catch(err => console.warn("Supabase attendance add error:", err));
+    sendLineAttendanceNotification(cleanLog).catch(err => {
       console.error("Error sending LINE notification for attendance check-in:", err);
     });
   };
 
   const handleUpdateAttendance = (updatedLog: AttendanceLog) => {
-    setAttendances(prev => prev.map(a => a.id === updatedLog.id ? updatedLog : a));
-    saveAttendance(updatedLog).catch(err => console.warn("Supabase attendance update error:", err));
-    sendLineAttendanceNotification(updatedLog).catch(err => {
+    const cleanLog = {
+      ...updatedLog,
+      id: toUUID(updatedLog.id)
+    };
+    setAttendances(prev => prev.map(a => a.id === cleanLog.id ? cleanLog : a));
+    saveAttendance(cleanLog).catch(err => console.warn("Supabase attendance update error:", err));
+    sendLineAttendanceNotification(cleanLog).catch(err => {
       console.error("Error sending LINE notification for attendance check-out:", err);
     });
   };

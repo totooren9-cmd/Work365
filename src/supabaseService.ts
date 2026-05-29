@@ -20,6 +20,7 @@ import {
   INITIAL_REFUELS, 
   INITIAL_EXPENSES 
 } from './mockData';
+import { toUUID } from './utils/uuid';
 
 // GRACEFUL EXCEPTION & TABLE VERIFICATION WRAPPER
 async function runQuery<T>(queryPromise: any, fallback: T): Promise<T> {
@@ -39,9 +40,14 @@ async function runQuery<T>(queryPromise: any, fallback: T): Promise<T> {
 // 1. HEAVY MACHINERY MAPPINGS
 export async function getMachinery(): Promise<HeavyMachinery[]> {
   const data = await runQuery(supabase.from('heavy_machinery').select('*'), null);
-  if (!data) return INITIAL_MACHINERY;
+  if (!data) {
+    return INITIAL_MACHINERY.map(m => ({
+      ...m,
+      id: toUUID(m.id)
+    }));
+  }
   return data.map((r: any) => ({
-    id: r.id,
+    id: toUUID(r.id),
     code: r.code,
     type: r.type,
     brand: r.brand,
@@ -57,7 +63,7 @@ export async function getMachinery(): Promise<HeavyMachinery[]> {
 
 export async function saveMachinery(m: HeavyMachinery) {
   const payload = {
-    id: m.id,
+    id: toUUID(m.id),
     code: m.code,
     type: m.type,
     brand: m.brand,
@@ -74,14 +80,19 @@ export async function saveMachinery(m: HeavyMachinery) {
 
 // 2. WORK SCHEDULE TASKS MAPPINGS
 export async function getTasks(): Promise<WorkScheduleTask[]> {
-  // Try fetching tasks joined with comment logs or JSONB
   const data = await runQuery(supabase.from('work_schedule_tasks').select('*'), null);
-  if (!data) return INITIAL_TASKS;
+  if (!data) {
+    return INITIAL_TASKS.map(t => ({
+      ...t,
+      id: toUUID(t.id),
+      machineryId: t.machineryId ? toUUID(t.machineryId) : undefined
+    }));
+  }
   return data.map((r: any) => ({
-    id: r.id,
+    id: toUUID(r.id),
     title: r.title,
     description: r.description || '',
-    machineryId: r.machinery_id,
+    machineryId: r.machinery_id ? toUUID(r.machinery_id) : undefined,
     assignedTo: r.assigned_to,
     priority: r.priority || 'medium',
     dueDate: r.due_date,
@@ -97,10 +108,10 @@ export async function getTasks(): Promise<WorkScheduleTask[]> {
 
 export async function saveTask(t: WorkScheduleTask) {
   const payload = {
-    id: t.id,
+    id: toUUID(t.id),
     title: t.title,
     description: t.description,
-    machinery_id: t.machineryId || null,
+    machinery_id: t.machineryId ? toUUID(t.machineryId) : null,
     assigned_to: t.assignedTo,
     priority: t.priority,
     due_date: t.dueDate,
@@ -114,15 +125,20 @@ export async function saveTask(t: WorkScheduleTask) {
 }
 
 export async function deleteTask(id: string) {
-  await supabase.from('work_schedule_tasks').delete().eq('id', id);
+  await supabase.from('work_schedule_tasks').delete().eq('id', toUUID(id));
 }
 
 // 3. SPARE PARTS STOCK MAPPINGS
 export async function getStock(): Promise<StockItem[]> {
   const data = await runQuery(supabase.from('stock_items').select('*'), null);
-  if (!data) return INITIAL_STOCK;
+  if (!data) {
+    return INITIAL_STOCK.map(s => ({
+      ...s,
+      id: toUUID(s.id)
+    }));
+  }
   return data.map((r: any) => ({
-    id: r.id,
+    id: toUUID(r.id),
     code: r.code,
     name: r.name,
     category: r.category,
@@ -136,7 +152,7 @@ export async function getStock(): Promise<StockItem[]> {
 
 export async function saveStockItem(s: StockItem) {
   const payload = {
-    id: s.id,
+    id: toUUID(s.id),
     code: s.code,
     name: s.name,
     category: s.category,
@@ -152,13 +168,19 @@ export async function saveStockItem(s: StockItem) {
 // 4. INVENTORY ISSUANCES MAPPINGS
 export async function getIssuances(stockList: StockItem[]): Promise<InventoryIssuance[]> {
   const data = await runQuery(supabase.from('inventory_issuances').select('*'), null);
-  if (!data) return INITIAL_ISSUANCES;
+  if (!data) {
+    return INITIAL_ISSUANCES.map(i => ({
+      ...i,
+      id: toUUID(i.id),
+      itemId: toUUID(i.itemId)
+    }));
+  }
   return data.map((r: any) => {
-    const item = stockList.find(s => s.id === r.item_id);
+    const item = stockList.find(s => s.id === toUUID(r.item_id));
     return {
-      id: r.id,
+      id: toUUID(r.id),
       documentNo: r.document_no || `REQ-${r.id.substring(0,8).toUpperCase()}`,
-      itemId: r.item_id,
+      itemId: toUUID(r.item_id),
       itemName: item ? item.name : 'อะไหล่ทั่วไป',
       qtyRequested: Number(r.qty_requested || 1),
       qtyApproved: Number(r.qty_approved || 0),
@@ -172,9 +194,9 @@ export async function getIssuances(stockList: StockItem[]): Promise<InventoryIss
 
 export async function saveIssuance(iss: InventoryIssuance) {
   const payload = {
-    id: iss.id,
+    id: toUUID(iss.id),
     document_no: iss.documentNo,
-    item_id: iss.itemId,
+    item_id: toUUID(iss.itemId),
     qty_requested: iss.qtyRequested,
     qty_approved: iss.qtyApproved,
     department: iss.department,
@@ -187,9 +209,14 @@ export async function saveIssuance(iss: InventoryIssuance) {
 // 5. ATTENDANCE LOG MAPS
 export async function getAttendances(): Promise<AttendanceLog[]> {
   const data = await runQuery(supabase.from('work_attendances').select('*'), null);
-  if (!data) return INITIAL_ATTENDANCE_LOGS;
+  if (!data) {
+    return INITIAL_ATTENDANCE_LOGS.map(a => ({
+      ...a,
+      id: toUUID(a.id)
+    }));
+  }
   return data.map((r: any) => ({
-    id: r.id,
+    id: toUUID(r.id),
     employeeName: r.employee_name,
     role: 'ช่างควบคุมเครื่องจักร',
     checkInTime: r.check_in ? r.check_in.substring(0, 5) + ' น.' : '--:--',
@@ -206,7 +233,7 @@ export async function saveAttendance(log: AttendanceLog) {
   const checkIn = log.checkInTime.replace(' น.', '').trim();
   const checkOut = log.checkOutTime ? log.checkOutTime.replace(' น.', '').trim() : null;
   const payload = {
-    id: log.id,
+    id: toUUID(log.id),
     employee_name: log.employeeName,
     check_in: checkIn.length === 5 ? checkIn + ':00' : '08:00:00',
     check_out: checkOut && checkOut.length === 5 ? checkOut + ':00' : null,
@@ -222,10 +249,16 @@ export async function saveAttendance(log: AttendanceLog) {
 // 6. MECHANICAL REPAIRS MAPPINGS
 export async function getRepairs(): Promise<RepairRequest[]> {
   const data = await runQuery(supabase.from('repair_requests').select('*'), null);
-  if (!data) return INITIAL_REPAIRS;
+  if (!data) {
+    return INITIAL_REPAIRS.map(r => ({
+      ...r,
+      id: toUUID(r.id),
+      machineryId: toUUID(r.machineryId)
+    }));
+  }
   return data.map((r: any) => ({
-    id: r.id,
-    machineryId: r.machinery_id,
+    id: toUUID(r.id),
+    machineryId: toUUID(r.machinery_id),
     reporterName: r.reporter_name,
     problemDesc: r.problem_desc,
     urgency: r.urgency || 'medium',
@@ -248,8 +281,8 @@ export async function getRepairs(): Promise<RepairRequest[]> {
 
 export async function saveRepair(rep: RepairRequest) {
   const payload = {
-    id: rep.id,
-    machinery_id: rep.machineryId,
+    id: toUUID(rep.id),
+    machinery_id: toUUID(rep.machineryId),
     reporter_name: rep.reporterName,
     problem_desc: rep.problemDesc,
     urgency: rep.urgency,
@@ -268,20 +301,26 @@ export async function saveRepair(rep: RepairRequest) {
 }
 
 export async function deleteRepair(id: string) {
-  await supabase.from('repair_requests').delete().eq('id', id);
+  await supabase.from('repair_requests').delete().eq('id', toUUID(id));
 }
 
 // 7. REFUEL SERVICES MAPPINGS
 export async function getRefuels(machList: HeavyMachinery[]): Promise<RefuelStatus[]> {
   const data = await runQuery(supabase.from('fuel_services').select('*'), null);
-  if (!data) return INITIAL_REFUELS;
+  if (!data) {
+    return INITIAL_REFUELS.map(rf => ({
+      ...rf,
+      id: toUUID(rf.id),
+      machineryId: toUUID(rf.machineryId)
+    }));
+  }
   return data.map((r: any) => {
-    const mach = machList.find(m => m.id === r.machinery_id);
+    const mach = machList.find(m => m.id === toUUID(r.machinery_id));
     return {
-      id: r.id,
+      id: toUUID(r.id),
       documentNo: r.document_no || `FUEL-${r.id.substring(0,8).toUpperCase()}`,
       date: r.refuel_date || new Date().toISOString().split('T')[0],
-      machineryId: r.machinery_id,
+      machineryId: toUUID(r.machinery_id),
       plateNumber: mach ? mach.plateNumber : 'ไม่ระบุทะเบียน',
       fuelType: r.fuel_type || 'diesel',
       requestedLiters: Number(r.requested_liters || 50),
@@ -303,9 +342,9 @@ export async function getRefuels(machList: HeavyMachinery[]): Promise<RefuelStat
 
 export async function saveRefuel(ref: RefuelStatus) {
   const payload = {
-    id: ref.id,
+    id: toUUID(ref.id),
     document_no: ref.documentNo,
-    machinery_id: ref.machineryId,
+    machinery_id: toUUID(ref.machineryId),
     refuel_date: ref.date,
     fuel_type: ref.fuelType,
     requested_liters: ref.requestedLiters,
@@ -328,9 +367,15 @@ export async function saveRefuel(ref: RefuelStatus) {
 // 8. SITE EXPENSES MAPPINGS
 export async function getExpenses(): Promise<ExpenseRecord[]> {
   const data = await runQuery(supabase.from('expense_records').select('*'), null);
-  if (!data) return INITIAL_EXPENSES;
+  if (!data) {
+    return INITIAL_EXPENSES.map(e => ({
+      ...e,
+      id: toUUID(e.id),
+      machineryId: e.machineryId ? toUUID(e.machineryId) : undefined
+    }));
+  }
   return data.map((r: any) => ({
-    id: r.id,
+    id: toUUID(r.id),
     date: r.expense_date || new Date().toISOString().split('T')[0],
     category: r.category || 'other',
     description: r.description || '',
@@ -338,13 +383,13 @@ export async function getExpenses(): Promise<ExpenseRecord[]> {
     receiptPhoto: r.receipt_photo_url || '',
     siteLocation: r.site_location || 'ไซต์งานหลัก CMMS',
     recordedBy: r.recorded_by || 'Admin',
-    machineryId: r.machinery_id || undefined
+    machineryId: r.machinery_id ? toUUID(r.machinery_id) : undefined
   }));
 }
 
 export async function saveExpense(exp: ExpenseRecord) {
   const payload = {
-    id: exp.id,
+    id: toUUID(exp.id),
     expense_date: exp.date,
     category: exp.category,
     description: exp.description,
@@ -352,11 +397,11 @@ export async function saveExpense(exp: ExpenseRecord) {
     receipt_photo_url: exp.receiptPhoto || '',
     site_location: exp.siteLocation,
     recorded_by: exp.recordedBy,
-    machinery_id: exp.machineryId || null
+    machinery_id: exp.machineryId ? toUUID(exp.machineryId) : null
   };
   await supabase.from('expense_records').upsert(payload);
 }
 
 export async function deleteExpense(id: string) {
-  await supabase.from('expense_records').delete().eq('id', id);
+  await supabase.from('expense_records').delete().eq('id', toUUID(id));
 }

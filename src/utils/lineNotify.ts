@@ -1,13 +1,23 @@
 import { WorkScheduleTask, RepairRequest, HeavyMachinery, InventoryIssuance, StockItem, RefuelStatus, AttendanceLog, ExpenseRecord } from '../types';
 
-const CHANNEL_ACCESS_TOKEN = "LOsEWhXvFup41WFZWMyMZtUwqGFWws583/YbGvEGtADMlAEfw1kJoc61miQlxR155ayovX2w+wQnWAAUGqKInRMkg43XgFvxcXoo8QkbPbDOso+a0PpwwBQDFUjQYF9LIuiemAo9f/iqKRxsJh6UXgdB04t89/1O/w1cDnyilFU=";
-const GROUP_ID = "C94ac0eec7f7dc7b97fd2767104d1e7a0";
+const DEFAULT_CHANNEL_ACCESS_TOKEN = "LOsEWhXvFup41WFZWMyMZtUwqGFWws583/YbGvEGtADMlAEfw1kJoc61miQlxR155ayovX2w+wQnWAAUGqKInRMkg43XgFvxcXoo8QkbPbDOso+a0PpwwBQDFUjQYF9LIuiemAo9f/iqKRxsJh6UXgdB04t89/1O/w1cDnyilFU=";
+const DEFAULT_GROUP_ID = "C94ac0eec7f7dc7b97fd2767104d1e7a0";
+
+export function getLineSettings() {
+  const customToken = typeof window !== 'undefined' ? localStorage.getItem('LINE_CHANNEL_ACCESS_TOKEN') : null;
+  const customGroupId = typeof window !== 'undefined' ? localStorage.getItem('LINE_GROUP_ID') : null;
+  return {
+    channelAccessToken: customToken || DEFAULT_CHANNEL_ACCESS_TOKEN,
+    groupId: customGroupId || DEFAULT_GROUP_ID
+  };
+}
 
 /**
  * Sends a pre-compiled Flex Message to the default LINE group
  */
 export async function pushLineFlexMessage(flexMessage: any) {
   try {
+    const { channelAccessToken, groupId } = getLineSettings();
     const response = await fetch('/api/line/push', {
       method: 'POST',
       headers: {
@@ -15,8 +25,8 @@ export async function pushLineFlexMessage(flexMessage: any) {
       },
       body: JSON.stringify({
         flexMessage,
-        channelAccessToken: CHANNEL_ACCESS_TOKEN,
-        groupId: GROUP_ID
+        channelAccessToken,
+        groupId
       })
     });
     
@@ -177,7 +187,7 @@ export async function sendLineTaskNotification(task: WorkScheduleTask, machinery
                 "layout": "baseline",
                 "spacing": "sm",
                 "contents": [
-                  { "type": "text", "text": "เครื่องจักรใช้งาน", "color": "#64748b", "size": "xs", "flex": 2.5 },
+                  { "type": "text", "text": "เครื่องจักรใช้งาน", "color": "#64748b", "size": "xs", "flex": 3 },
                   { "type": "text", "text": machineryCode, "wrap": true, "color": "#334155", "size": "xs", "flex": 5, "weight": "bold" }
                 ]
               },
@@ -187,7 +197,7 @@ export async function sendLineTaskNotification(task: WorkScheduleTask, machinery
                 "spacing": "sm",
                 "margin": "sm",
                 "contents": [
-                  { "type": "text", "text": "กำหนดส่งมอบ", "color": "#64748b", "size": "xs", "flex": 2.5 },
+                  { "type": "text", "text": "กำหนดส่งมอบ", "color": "#64748b", "size": "xs", "flex": 3 },
                   { "type": "text", "text": task.dueDate || 'ไม่ระบุ', "wrap": true, "color": "#334155", "size": "xs", "flex": 5, "weight": "bold" }
                 ]
               },
@@ -197,7 +207,7 @@ export async function sendLineTaskNotification(task: WorkScheduleTask, machinery
                 "spacing": "sm",
                 "margin": "sm",
                 "contents": [
-                  { "type": "text", "text": "ความด่วนของงาน", "color": "#64748b", "size": "xs", "flex": 2.5 },
+                  { "type": "text", "text": "ความด่วนของงาน", "color": "#64748b", "size": "xs", "flex": 3 },
                   { "type": "text", "text": priorityText, "wrap": true, "color": priorityColor, "size": "xs", "flex": 5, "weight": "bold" }
                 ]
               },
@@ -207,7 +217,7 @@ export async function sendLineTaskNotification(task: WorkScheduleTask, machinery
                 "spacing": "sm",
                 "margin": "sm",
                 "contents": [
-                  { "type": "text", "text": "สถานที่หน้างาน", "color": "#64748b", "size": "xs", "flex": 2.5 },
+                  { "type": "text", "text": "สถานที่หน้างาน", "color": "#64748b", "size": "xs", "flex": 3 },
                   { "type": "text", "text": task.gpsLocName || 'ไม่ระบุพิกัด', "wrap": true, "color": "#334155", "size": "xs", "flex": 5, "weight": "bold" }
                 ]
               }

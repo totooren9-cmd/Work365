@@ -1090,7 +1090,7 @@ export default function WorkScheduleView({
                   {/* Status workflow controller */}
                   <div className="space-y-2 mt-4">
                     <label className="block text-[10px] uppercase font-bold tracking-widest text-stone-500">อัปเดตความก้าวหน้าหน้างานจริง</label>
-                    <div className="grid grid-cols-5 gap-1 bg-stone-50 p-1.5 rounded-xl border border-slate-500/5">
+                    <div className="grid grid-cols-5 gap-1 bg-stone-50 p-1 rounded-xl border border-slate-500/5">
                       {(['pending', 'in_progress', 'awaiting_approval', 'completed', 'cancelled'] as const).map(st => {
                         const statusTh = 
                           st === 'pending' ? 'รอดำเนินการ' :
@@ -1103,14 +1103,14 @@ export default function WorkScheduleView({
                           <button
                             key={st}
                             onClick={() => handleStatusChange(st)}
-                            className={`py-1.5 rounded-lg text-[9.5px] font-black transition-all border ${
+                            className={`py-2 px-0.5 rounded-lg text-[8px] xs:text-[9px] md:text-[10px] font-black transition-all border text-center flex items-center justify-center tracking-tighter ${
                               activeVal 
-                                ? 'bg-orange-500 border-orange-500 text-white shadow font-extrabold' 
-                                : 'bg-transparent border-transparent text-slate-405 hover:bg-slate-500/10'
+                                ? 'bg-orange-500 border-orange-500 text-white shadow-sm font-extrabold' 
+                                : 'bg-transparent border-transparent text-stone-500 hover:bg-stone-100'
                             }`}
                             title={statusTh}
                           >
-                            {statusTh.substring(0, 3)}
+                            {statusTh}
                           </button>
                         );
                       })}

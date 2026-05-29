@@ -133,9 +133,21 @@ export default function LineFlexBuilder() {
 
   const currentData = flexData[activeType];
 
-  const [channelAccessToken, setChannelAccessToken] = useState('LOsEWhXvFup41WFZWMyMZtUwqGFWws583/YbGvEGtADMlAEfw1kJoc61miQlxR155ayovX2w+wQnWAAUGqKInRMkg43XgFvxcXoo8QkbPbDOso+a0PpwwBQDFUjQYF9LIuiemAo9f/iqKRxsJh6UXgdB04t89/1O/w1cDnyilFU=');
-  const [groupId, setGroupId] = useState('C94ac0eec7f7dc7b97fd2767104d1e7a0');
+  const [channelAccessToken, setChannelAccessToken] = useState(() => 
+    localStorage.getItem('LINE_CHANNEL_ACCESS_TOKEN') || 'LOsEWhXvFup41WFZWMyMZtUwqGFWws583/YbGvEGtADMlAEfw1kJoc61miQlxR155ayovX2w+wQnWAAUGqKInRMkg43XgFvxcXoo8QkbPbDOso+a0PpwwBQDFUjQYF9LIuiemAo9f/iqKRxsJh6UXgdB04t89/1O/w1cDnyilFU='
+  );
+  const [groupId, setGroupId] = useState(() => 
+    localStorage.getItem('LINE_GROUP_ID') || 'C94ac0eec7f7dc7b97fd2767104d1e7a0'
+  );
   const [isSending, setIsSending] = useState(false);
+
+  React.useEffect(() => {
+    localStorage.setItem('LINE_CHANNEL_ACCESS_TOKEN', channelAccessToken);
+  }, [channelAccessToken]);
+
+  React.useEffect(() => {
+    localStorage.setItem('LINE_GROUP_ID', groupId);
+  }, [groupId]);
   
   const handleTestConnection = async () => {
     setIsSending(true);
