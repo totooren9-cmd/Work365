@@ -41,6 +41,7 @@ import {
   CartesianGrid
 } from 'recharts';
 import { exportToExcel } from '../utils/excelExport';
+import AttendanceMap from './AttendanceMap';
 import { 
   WorkScheduleTask, 
   RepairRequest, 
@@ -103,6 +104,9 @@ export default function ReportsCenterView({
 
   // Selected table row for detailed image attachment popup
   const [selectedPhotoRow, setSelectedPhotoRow] = useState<any>(null);
+
+  // Selected attendance log to focus on map
+  const [selectedMapLogId, setSelectedMapLogId] = useState<string | null>(null);
 
   // Ask AI Advisor chatbot sim state
   const [aiPrompt, setAiPrompt] = useState('');
@@ -1406,8 +1410,16 @@ export default function ReportsCenterView({
                     </tr>
                   ) : (
                     paginatedTableData.map((row: any, idx: number) => {
+                      const isRowSelectedOnMap = activeReport === 'attendance' && selectedMapLogId === row.id;
                       return (
-                        <tr key={row.id || idx} className="hover:bg-amber-100/10 transition-colors">
+                        <tr 
+                          key={row.id || idx} 
+                          className={`transition-colors ${
+                            isRowSelectedOnMap 
+                              ? 'bg-violet-50/80 hover:bg-violet-100/50 shadow-inner border-l-4 border-violet-500' 
+                              : 'hover:bg-amber-100/10'
+                          }`}
+                        >
                           
                           {/* REPORT 1 BODY CELLS */}
                           {activeReport === 'schedule' && (
@@ -1567,7 +1579,23 @@ export default function ReportsCenterView({
                           {/* REPORT 8 BODY CELLS */}
                           {activeReport === 'attendance' && (
                             <>
-                              <td className="p-3 font-black text-stone-800">{row.employeeName}</td>
+                              <td className="p-3 font-black text-stone-800">
+                                <div className="flex items-center gap-2">
+                                  <span>{row.employeeName}</span>
+                                  <button
+                                    type="button"
+                                    onClick={() => setSelectedMapLogId(row.id === selectedMapLogId ? null : row.id)}
+                                    title="ดูพิกัดบนแผนที่"
+                                    className={`p-1 rounded-lg transition-all border shrink-0 ${
+                                      selectedMapLogId === row.id 
+                                        ? 'bg-violet-600 border-violet-655 text-white shadow-sm' 
+                                        : 'bg-stone-50 border-stone-200 text-stone-500 hover:bg-violet-50 hover:text-violet-600 hover:border-violet-200'
+                                    }`}
+                                  >
+                                    <MapPin className="w-3.5 h-3.5" />
+                                  </button>
+                                </div>
+                              </td>
                               <td className="p-3 font-medium text-stone-500">{row.role || 'พนักงานช่างทั่วไป'}</td>
                               <td className="p-3 text-center text-stone-650 font-bold">{row.siteName || 'ลุ่มแม่น้ำงาม'}</td>
                               <td className="p-3 text-center font-mono text-stone-700">{row.checkInTime ? row.checkInTime.substring(11, 16) : '-'} น.</td>
@@ -1626,36 +1654,64 @@ export default function ReportsCenterView({
               <div className="border-b border-stone-100 pb-2 mb-3">
                 <h3 className="text-xs uppercase font-black text-stone-500 tracking-wider flex items-center gap-1">
                   <MapPin className="w-4 h-4 text-rose-500" />
-                  พิกัดลงเวลาหน้างานก่อสร้าง (GPS Map Telemetry)
+                  {activeReport === 'attendance' ? 'แผนที่ภูมิศาสตร์จริงลงเวลากล้อง GPS' : 'พิกัดลงเวลาหน้างานก่อสร้าง (GPS Map Telemetry)'}
                 </h3>
               </div>
               
-              {/* Clean Schematic Map Indicator Overlay */}
-              <div className="relative w-full h-44 bg-slate-100 rounded-xl overflow-hidden border border-slate-200 shadow-sm flex items-center justify-center">
-                <div className="absolute inset-0 bg-radial-[circle_at_center,_var(--tw-gradient-stops)] from-sky-100 via-stone-50 to-stone-150/40 opacity-70"></div>
-                <div className="absolute top-2 left-4 text-[9px] uppercase font-mono font-black text-stone-400">Lamphun/Yaw Basin 12km Matrix</div>
-                
-                {/* Simulated Pins */}
-                <div className="absolute top-1/3 left-1/4 flex flex-col items-center">
-                  <span className="w-2.5 h-2.5 bg-rose-500 rounded-full animate-ping absolute"></span>
-                  <MapPin className="w-5 h-5 text-rose-600 relative z-10" />
-                  <span className="bg-stone-850 text-[#fffdf2] font-black text-[7px] px-1.5 rounded-md shadow mt-0.5">ไซต์เหนือ 1</span>
+              {activeReport === 'attendance' ? (
+                <div className="space-y-2">
+                  <AttendanceMap 
+                    attendances={attendanceData.list} 
+                    selectedLogId={selectedMapLogId}
+                    onSelectLog={(id) => setSelectedMapLogId(id)}
+                  />
+                  {selectedMapLogId && (
+                    <div className="flex items-center justify-between bg-stone-50 border border-stone-100 rounded-lg px-2 py-1 text-[10px]">
+                      <span className="font-bold text-stone-600">
+                        กำลังระบุโฟกัส: <span className="text-rose-600 font-extrabold">{attendanceData.list.find(a => a.id === selectedMapLogId)?.employeeName || 'พนักงาน'}</span>
+                      </span>
+                      <button 
+                        type="button"
+                        onClick={() => setSelectedMapLogId(null)}
+                        className="text-stone-400 hover:text-stone-700 font-extrabold"
+                      >
+                        [ เลิกจับตา ]
+                      </button>
+                    </div>
+                  )}
                 </div>
+              ) : (
+                /* Clean Schematic Map Indicator Overlay */
+                <div className="relative w-full h-44 bg-slate-100 rounded-xl overflow-hidden border border-slate-200 shadow-sm flex items-center justify-center">
+                  <div className="absolute inset-0 bg-radial-[circle_at_center,_var(--tw-gradient-stops)] from-sky-100 via-stone-50 to-stone-150/40 opacity-70"></div>
+                  <div className="absolute top-2 left-4 text-[9px] uppercase font-mono font-black text-stone-400">Lamphun/Yaw Basin 12km Matrix</div>
+                  
+                  {/* Simulated Pins */}
+                  <div className="absolute top-1/3 left-1/4 flex flex-col items-center">
+                    <span className="w-2.5 h-2.5 bg-rose-500 rounded-full animate-ping absolute"></span>
+                    <MapPin className="w-5 h-5 text-rose-600 relative z-10" />
+                    <span className="bg-stone-850 text-[#fffdf2] font-black text-[7px] px-1.5 rounded-md shadow mt-0.5">ไซต์เหนือ 1</span>
+                  </div>
 
-                <div className="absolute bottom-1/4 right-1/3 flex flex-col items-center">
-                  <MapPin className="w-5 h-5 text-emerald-600" />
-                  <span className="bg-stone-850 text-[#fffdf2] font-black text-[7px] px-1.5 rounded-md shadow mt-0.5">ลุ่มน้ำยม 3</span>
-                </div>
+                  <div className="absolute bottom-1/4 right-1/3 flex flex-col items-center">
+                    <MapPin className="w-5 h-5 text-emerald-600" />
+                    <span className="bg-stone-850 text-[#fffdf2] font-black text-[7px] px-1.5 rounded-md shadow mt-0.5">ลุ่มน้ำยม 3</span>
+                  </div>
 
-                {/* Technical Coordinates display */}
-                <div className="absolute bottom-2 left-2 right-2 bg-stone-900/95 backdrop-blur border border-stone-800 text-amber-400 font-mono text-[8px] p-1.5 rounded-lg flex justify-between">
-                  <span>GPS Lat: 18.5492"N</span>
-                  <span>Lon: 99.0431"E</span>
-                  <span>Accuracy: ±4.5m</span>
+                  {/* Technical Coordinates display */}
+                  <div className="absolute bottom-2 left-2 right-2 bg-stone-900/95 backdrop-blur border border-stone-800 text-amber-400 font-mono text-[8px] p-1.5 rounded-lg flex justify-between">
+                    <span>GPS Lat: 18.5492"N</span>
+                    <span>Lon: 99.0431"E</span>
+                    <span>Accuracy: ±4.5m</span>
+                  </div>
                 </div>
-              </div>
+              )}
+              
               <p className="text-[9.5px] mt-2 text-stone-500 font-medium leading-normal">
-                📍 พิกัดระบุอัตโนมัติเมื่อกดลงชื่อตรวจรับงานผ่านกล้อง สัญญาณภาพถูกบันทึกในฐานข้อมูลคลาวด์ ซิงค์ความแม่นยำสูง
+                {activeReport === 'attendance'
+                  ? '📌 แสดงข้อมูลและหมุกสแกนจริตผ่านพิกัดจีพีเอสจริง (เขียว = ลงเวลากดเข้าไซต์งาน, แดง = สแกนเก็บจบไซต์งาน) และภาพถ่ายพยานจากกล้อง'
+                  : '📍 พิกัดระบุอัตโนมัติเมื่อกดลงชื่อตรวจรับงานผ่านกล้อง สัญญาณภาพถูกบันทึกในฐานข้อมูลคลาวด์ ซิงค์ความแม่นยำสูง'
+                }
               </p>
             </div>
           )}
