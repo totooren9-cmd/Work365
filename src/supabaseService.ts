@@ -6,19 +6,10 @@ import {
   InventoryIssuance, 
   AttendanceLog, 
   RepairRequest, 
-  PreventiveMaintenance, 
   RefuelStatus, 
-  ExpenseRecord 
+  ExpenseRecord,
+  GoogleDriveUpload
 } from './types';
-import { 
-  INITIAL_MACHINERY, 
-  INITIAL_TASKS, 
-  INITIAL_STOCK, 
-  INITIAL_ISSUANCES, 
-  INITIAL_REPAIRS, 
-  INITIAL_REFUELS, 
-  INITIAL_EXPENSES 
-} from './mockData';
 import { toUUID } from './utils/uuid';
 
 // GRACEFUL EXCEPTION & TABLE VERIFICATION WRAPPER
@@ -26,12 +17,12 @@ async function runQuery<T>(queryPromise: any, fallback: T): Promise<T> {
   try {
     const { data, error } = await queryPromise;
     if (error) {
-      console.warn('Supabase DB Query warning (falling back to local memory):', error);
+      console.warn('Supabase DB Query warning:', error);
       return fallback;
     }
     return data || fallback;
   } catch (err) {
-    console.error('Supabase DB Exception (falling back to local memory):', err);
+    console.error('Supabase DB Exception:', err);
     return fallback;
   }
 }
@@ -40,10 +31,7 @@ async function runQuery<T>(queryPromise: any, fallback: T): Promise<T> {
 export async function getMachinery(): Promise<HeavyMachinery[]> {
   const data = await runQuery(supabase.from('heavy_machinery').select('*'), null);
   if (!data) {
-    return INITIAL_MACHINERY.map(m => ({
-      ...m,
-      id: toUUID(m.id)
-    }));
+    return [];
   }
   return data.map((r: any) => ({
     id: toUUID(r.id),
@@ -178,10 +166,7 @@ export async function deleteTask(id: string) {
 export async function getStock(): Promise<StockItem[]> {
   const data = await runQuery(supabase.from('stock_items').select('*'), null);
   if (!data) {
-    return INITIAL_STOCK.map(s => ({
-      ...s,
-      id: toUUID(s.id)
-    }));
+    return [];
   }
   return data.map((r: any) => ({
     id: toUUID(r.id),
@@ -215,11 +200,7 @@ export async function saveStockItem(s: StockItem) {
 export async function getIssuances(stockList: StockItem[]): Promise<InventoryIssuance[]> {
   const data = await runQuery(supabase.from('inventory_issuances').select('*'), null);
   if (!data) {
-    return INITIAL_ISSUANCES.map(i => ({
-      ...i,
-      id: toUUID(i.id),
-      itemId: toUUID(i.itemId)
-    }));
+    return [];
   }
   return data.map((r: any) => {
     const item = stockList.find(s => s.id === toUUID(r.item_id));
@@ -317,11 +298,7 @@ export async function saveAttendance(log: AttendanceLog) {
 export async function getRepairs(): Promise<RepairRequest[]> {
   const data = await runQuery(supabase.from('repair_requests').select('*'), null);
   if (!data) {
-    return INITIAL_REPAIRS.map(r => ({
-      ...r,
-      id: toUUID(r.id),
-      machineryId: toUUID(r.machineryId)
-    }));
+    return [];
   }
   return data.map((r: any) => ({
     id: toUUID(r.id),
@@ -335,10 +312,7 @@ export async function getRepairs(): Promise<RepairRequest[]> {
     hoursMeterRecorded: Number(r.hours_meter_recorded || 0),
     photoUrl: r.reporter_photo_url || '',
     videoUrlMock: r.video_url_mock || '',
-    checklist: r.checklist || [
-      { task: "ตรวจวัดสภาพน้ำมันและพัดลมระบายความร้อน", done: true },
-      { task: "ถอดสลักคานหลักและตรวจดูความร้าวของไฮดรอลิก", done: false }
-    ],
+    checklist: r.checklist || [],
     signature: r.signature_base64 || '',
     beforePhoto: r.before_photo || '',
     afterPhoto: r.after_photo || '',
@@ -375,11 +349,7 @@ export async function deleteRepair(id: string) {
 export async function getRefuels(machList: HeavyMachinery[]): Promise<RefuelStatus[]> {
   const data = await runQuery(supabase.from('fuel_services').select('*'), null);
   if (!data) {
-    return INITIAL_REFUELS.map(rf => ({
-      ...rf,
-      id: toUUID(rf.id),
-      machineryId: toUUID(rf.machineryId)
-    }));
+    return [];
   }
   return data.map((r: any) => {
     const mach = machList.find(m => m.id === toUUID(r.machinery_id));
@@ -435,11 +405,7 @@ export async function saveRefuel(ref: RefuelStatus) {
 export async function getExpenses(): Promise<ExpenseRecord[]> {
   const data = await runQuery(supabase.from('expense_records').select('*'), null);
   if (!data) {
-    return INITIAL_EXPENSES.map(e => ({
-      ...e,
-      id: toUUID(e.id),
-      machineryId: e.machineryId ? toUUID(e.machineryId) : undefined
-    }));
+    return [];
   }
   return data.map((r: any) => ({
     id: toUUID(r.id),
@@ -471,4 +437,36 @@ export async function saveExpense(exp: ExpenseRecord) {
 
 export async function deleteExpense(id: string) {
   await supabase.from('expense_records').delete().eq('id', toUUID(id));
+}
+
+// 9. GOOGLE DRIVE UPLOADS MAPPINGS
+export async function getGoogleDriveUploads(): Promise<GoogleDriveUpload[]> {
+  const data = await runQuery(supabase.from('google_drive_uploads').select('*'), null);
+  if (!data) {
+    return [];
+  }
+  return data.map((r: any) => ({
+    id: toUUID(r.id),
+    fileName: r.file_name || '',
+    fileUrl: r.file_url || '',
+    driveFileId: r.drive_file_id || '',
+    uploadDate: r.upload_date || new Date().toISOString(),
+    uploadBy: r.upload_by || 'Unknown',
+    module: r.module || '',
+    documentNo: r.document_no || ''
+  }));
+}
+
+export async function saveGoogleDriveUpload(upload: GoogleDriveUpload) {
+  const payload = {
+    id: toUUID(upload.id),
+    file_name: upload.fileName,
+    file_url: upload.fileUrl,
+    drive_file_id: upload.driveFileId,
+    upload_date: upload.uploadDate,
+    upload_by: upload.uploadBy,
+    module: upload.module,
+    document_no: upload.documentNo
+  };
+  await supabase.from('google_drive_uploads').upsert(payload);
 }

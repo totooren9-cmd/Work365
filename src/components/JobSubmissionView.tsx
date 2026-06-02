@@ -15,7 +15,7 @@ import {
 } from 'lucide-react';
 import { WorkScheduleTask } from '../types';
 import { saveTask } from '../supabaseService';
-import { sendLineJobSubmissionNotification } from '../utils/lineNotify';
+import { sendLineJobSubmissionNotification, uploadFileAndNotify } from '../utils/lineNotify';
 
 interface JobSubmissionViewProps {
   tasks: WorkScheduleTask[];
@@ -210,6 +210,31 @@ export default function JobSubmissionView({ tasks, onTaskUpdated, theme }: JobSu
 
     try {
       const finalStatus = progress === 100 ? 'completed' : 'in_progress';
+      const eventLabel = progress === 100 ? 'งานเสร็จสิ้น' : 'ส่งงานช่าง';
+      const docId = selectedTaskId === 'custom' ? `JOB-${Date.now().toString().slice(-4)}` : selectedTaskId;
+      
+      let finalPhoto = photoUrl;
+      if (photoUrl && photoUrl.startsWith('data:')) {
+        finalPhoto = await uploadFileAndNotify({
+          image: photoUrl,
+          module: 'ส่งงานช่าง',
+          docId,
+          uploadBy: workerName,
+          status: progress === 100 ? `ปิดจ็อบงานสำเร็จ 100% [${taskTitle}]` : `ส่งมอบงานความก้าวหน้า ${progress}% [${taskTitle}]`
+        });
+      } else {
+        const { sendGoogleDriveLineNotification } = await import('../utils/lineNotify');
+        const thaiDate = new Date().toLocaleDateString('th-TH') + ' ' + new Date().toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' }) + ' น.';
+        await sendGoogleDriveLineNotification({
+          docId,
+          jobType: eventLabel,
+          operator: workerName,
+          timestamp: thaiDate,
+          status: progress === 100 ? `เสร็จสมบูรณ์ 100% [${taskTitle}]` : `ความคืบหน้า ${progress}% [${taskTitle}]`,
+          imageUrl: finalPhoto || undefined
+        });
+      }
+
       let taskToSave: WorkScheduleTask;
 
       if (targetTask) {
@@ -223,7 +248,7 @@ export default function JobSubmissionView({ tasks, onTaskUpdated, theme }: JobSu
           }
         ];
 
-        const updatedPhotos = photoUrl ? [...(targetTask.photoUrls || []), photoUrl] : (targetTask.photoUrls || []);
+        const updatedPhotos = finalPhoto ? [...(targetTask.photoUrls || []), finalPhoto] : (targetTask.photoUrls || []);
         
         taskToSave = {
           ...targetTask,
@@ -234,7 +259,7 @@ export default function JobSubmissionView({ tasks, onTaskUpdated, theme }: JobSu
       } else {
         // Create new schedule task record for standard job reporting directly mapped
         taskToSave = {
-          id: `tsk-${Math.floor(Math.random() * 900) + 100}`,
+          id: docId,
           title: taskTitle,
           description: workDetails,
           assignedTo: workerName,
@@ -250,7 +275,7 @@ export default function JobSubmissionView({ tasks, onTaskUpdated, theme }: JobSu
             }
           ],
           comments: [],
-          photoUrls: photoUrl ? [photoUrl] : [],
+          photoUrls: finalPhoto ? [finalPhoto] : [],
           employees: [workerName],
           locations: gpsLocation ? [gpsLocation] : []
         };
@@ -262,18 +287,8 @@ export default function JobSubmissionView({ tasks, onTaskUpdated, theme }: JobSu
       // Update global application screen state
       onTaskUpdated(taskToSave);
 
-      // 2. Fire Line Flex message with the beautiful custom alert context
-      await sendLineJobSubmissionNotification(
-        taskTitle,
-        workerName,
-        workDetails,
-        progress,
-        gpsLocation,
-        photoUrl || undefined
-      );
-
       // Alert Success
-      alert(`🎉 บันทึกข้อมูลผลงานจริง และส่งสติ๊กเกอร์ LINE Flex Message แจ้งเตือนเสร็จสิ้นไร้รอยต่อ 100%!`);
+      alert(`🎉 บันทึกข้อมูลส่งงานช่างเรียบร้อย และเก็บไฟล์รูปภาพใน Google Drive แยกตามปีและเดือน พร้อมส่งแจ้งเตือน Flex LINE OA เรียบร้อยแล้ว!`);
       
       // Reset Fields
       setSelectedTaskId('');

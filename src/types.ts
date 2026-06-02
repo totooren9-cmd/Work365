@@ -186,3 +186,15 @@ export interface AuditLog {
   timestamp: string;
   description: string;
 }
+
+export interface GoogleDriveUpload {
+  id: string;
+  fileName: string;
+  fileUrl: string;
+  driveFileId: string;
+  uploadDate: string;
+  uploadBy: string;
+  module: string;
+  documentNo: string;
+}
+

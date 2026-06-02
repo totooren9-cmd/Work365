@@ -273,3 +273,17 @@ INSERT INTO expense_records (category, amount, description, site_location, recor
 ('parts', 15000, 'ค่าอะไหล่ CAT', 'Site A', 'Admin'),
 ('repair', 4500, 'ค่าแรงช่างนอก', 'Site C', 'Admin'),
 ('other', 1200, 'ค่าอาหารรับรอง', 'Office', 'Admin');
+
+-- 12. Google Drive Uploaded Files Database
+CREATE TABLE IF NOT EXISTS google_drive_uploads (
+    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+    file_name VARCHAR(255) NOT NULL,
+    file_url TEXT NOT NULL,
+    drive_file_id VARCHAR(100) NOT NULL,
+    upload_date TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc'::text, NOW()) NOT NULL,
+    upload_by VARCHAR(150),
+    module VARCHAR(100) NOT NULL,
+    document_no VARCHAR(100) NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc'::text, NOW()) NOT NULL
+);
+

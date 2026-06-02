@@ -1,4 +1,6 @@
 import { WorkScheduleTask, RepairRequest, HeavyMachinery, InventoryIssuance, StockItem, RefuelStatus, AttendanceLog, ExpenseRecord } from '../types';
+import { saveGoogleDriveUpload } from '../supabaseService';
+
 
 const DEFAULT_CHANNEL_ACCESS_TOKEN = "LOsEWhXvFup41WFZWMyMZtUwqGFWws583/YbGvEGtADMlAEfw1kJoc61miQlxR155ayovX2w+wQnWAAUGqKInRMkg43XgFvxcXoo8QkbPbDOso+a0PpwwBQDFUjQYF9LIuiemAo9f/iqKRxsJh6UXgdB04t89/1O/w1cDnyilFU=";
 const DEFAULT_GROUP_ID = "C94ac0eec7f7dc7b97fd2767104d1e7a0";
@@ -1737,3 +1739,291 @@ export async function sendLineJobSubmissionNotification(
 
   return await pushLineFlexMessage(flexJson);
 }
+
+/**
+ * Sends a unified, beautifully styled Google Drive + LINE OA Flex notification
+ */
+export async function sendGoogleDriveLineNotification(params: {
+  docId: string;
+  jobType: string;
+  operator: string;
+  timestamp: string;
+  status: string;
+  imageUrl?: string;
+}) {
+  const { docId, jobType, operator, timestamp, status, imageUrl } = params;
+  
+  const displayId = docId || "JOB-MOCK-ID";
+  const appUrl = (typeof window !== 'undefined' && window.location) 
+    ? window.location.origin 
+    : (process.env.APP_URL || "https://ais-dev-v4xmqfyvpohkbt7yv5i5b4-778841450865.asia-southeast1.run.app");
+  
+  const actionUrl = `${appUrl}/jobs/${displayId}`;
+  const activeImgUrl = (imageUrl && imageUrl.startsWith("http")) 
+    ? imageUrl
+    : "https://images.unsplash.com/photo-1541625602330-2277a4c46182?auto=format&fit=crop&q=80&w=600";
+
+  const flexJson = {
+    "type": "flex",
+    "altText": `🔔 แจ้งเตือนรายการใหม่: [${jobType}] ${displayId}`,
+    "contents": {
+      "type": "bubble",
+      "size": "mega",
+      "header": {
+        "type": "box",
+        "layout": "vertical",
+        "backgroundColor": "#1e3a8a",
+        "paddingAll": "lg",
+        "contents": [
+          {
+            "type": "text",
+            "text": "🔔 แจ้งเตือนรายการใหม่",
+            "weight": "bold",
+            "color": "#ffffff",
+            "size": "md",
+            "align": "center"
+          }
+        ]
+      },
+      "hero": {
+        "type": "image",
+        "url": activeImgUrl,
+        "size": "full",
+        "aspectRatio": "16:9",
+        "aspectMode": "cover"
+      },
+      "body": {
+        "type": "box",
+        "layout": "vertical",
+        "spacing": "md",
+        "paddingAll": "lg",
+        "contents": [
+          {
+            "type": "box",
+            "layout": "horizontal",
+            "spacing": "xs",
+            "contents": [
+              {
+                "type": "text",
+                "text": "เลขที่เอกสาร",
+                "size": "xs",
+                "color": "#64748b",
+                "flex": 4
+              },
+              {
+                "type": "text",
+                "text": displayId,
+                "size": "xs",
+                "weight": "bold",
+                "color": "#1e293b",
+                "align": "end",
+                "flex": 8
+              }
+            ]
+          },
+          {
+            "type": "box",
+            "layout": "horizontal",
+            "spacing": "xs",
+            "contents": [
+              {
+                "type": "text",
+                "text": "ประเภทงาน",
+                "size": "xs",
+                "color": "#64748b",
+                "flex": 4
+              },
+              {
+                "type": "text",
+                "text": jobType,
+                "size": "xs",
+                "color": "#0f766e",
+                "align": "end",
+                "weight": "bold",
+                "flex": 8
+              }
+            ]
+          },
+          {
+            "type": "box",
+            "layout": "horizontal",
+            "spacing": "xs",
+            "contents": [
+              {
+                "type": "text",
+                "text": "ผู้ดำเนินการ",
+                "size": "xs",
+                "color": "#64748b",
+                "flex": 4
+              },
+              {
+                "type": "text",
+                "text": operator,
+                "size": "xs",
+                "color": "#334155",
+                "align": "end",
+                "flex": 8
+              }
+            ]
+          },
+          {
+            "type": "box",
+            "layout": "horizontal",
+            "spacing": "xs",
+            "contents": [
+              {
+                "type": "text",
+                "text": "วันที่เวลา",
+                "size": "xs",
+                "color": "#64748b",
+                "flex": 4
+              },
+              {
+                "type": "text",
+                "text": timestamp,
+                "size": "xs",
+                "color": "#334155",
+                "align": "end",
+                "flex": 8
+              }
+            ]
+          },
+          {
+            "type": "box",
+            "layout": "horizontal",
+            "spacing": "xs",
+            "contents": [
+              {
+                "type": "text",
+                "text": "สถานะ",
+                "size": "xs",
+                "color": "#64748b",
+                "flex": 4
+              },
+              {
+                "type": "text",
+                "text": status,
+                "size": "xs",
+                "color": "#b91c1c",
+                "align": "end",
+                "weight": "bold",
+                "flex": 8
+              }
+            ]
+          }
+        ]
+      },
+      "footer": {
+        "type": "box",
+        "layout": "vertical",
+        "spacing": "sm",
+        "contents": [
+          {
+            "type": "button",
+            "style": "primary",
+            "color": "#2563eb",
+            "height": "sm",
+            "action": {
+              "type": "uri",
+              "label": "เปิดรายการตรวจสอบ",
+              "uri": actionUrl
+            }
+          }
+        ]
+      }
+    }
+  };
+
+  return await pushLineFlexMessage(flexJson);
+}
+
+/**
+ * Upload base64 image, save database metadata (Supabase & localStorage) and trigger line notification.
+ */
+export async function uploadFileAndNotify(params: {
+  image: string;
+  module: string;
+  docId: string;
+  uploadBy: string;
+  status: string;
+}): Promise<string> {
+  const { image, module: moduleName, docId, uploadBy, status } = params;
+  
+  if (!image) {
+    console.warn("No image found to upload, returning empty.");
+    return "";
+  }
+
+  // If the image is not a base64 string, it's already a URL, so just trigger notification
+  if (!image.startsWith("data:")) {
+    try {
+      const thaiDate = new Date().toLocaleDateString('th-TH') + ' ' + new Date().toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' }) + ' น.';
+      await sendGoogleDriveLineNotification({
+        docId,
+        jobType: moduleName,
+        operator: uploadBy,
+        timestamp: thaiDate,
+        status,
+        imageUrl: image
+      });
+    } catch (e) {
+      console.warn("Error running notification for already uploaded image:", e);
+    }
+    return image;
+  }
+
+  try {
+    const response = await fetch('/api/upload-photo', {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        image,
+        module: moduleName,
+        docId,
+        uploadBy
+      })
+    });
+
+    if (!response.ok) {
+      throw new Error(`Upload endpoint error: ${response.status}`);
+    }
+
+    const data = await response.json();
+    if (!data.success) {
+      throw new Error(data.error || "Upload response success false");
+    }
+
+    // Save to DB
+    const uploadMeta = {
+      id: `drv-${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
+      fileName: data.fileName,
+      fileUrl: data.url,
+      driveFileId: data.fileId || `fallback-${Date.now()}`,
+      uploadDate: data.uploadDate || new Date().toISOString(),
+      uploadBy: data.uploadBy || uploadBy,
+      module: data.module,
+      documentNo: data.documentNo
+    };
+
+    await saveGoogleDriveUpload(uploadMeta);
+
+    // Prompt LINE Flex notification
+    const thaiDate = new Date().toLocaleDateString('th-TH') + ' ' + new Date().toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' }) + ' น.';
+    await sendGoogleDriveLineNotification({
+      docId,
+      jobType: moduleName,
+      operator: uploadBy,
+      timestamp: thaiDate,
+      status,
+      imageUrl: data.url
+    });
+
+    return data.url;
+  } catch (err) {
+    console.error("Error in uploadFileAndNotify:", err);
+    // Return base64 as fallback so it displays
+    return image;
+  }
+}
+
+

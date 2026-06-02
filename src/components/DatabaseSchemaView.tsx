@@ -5,7 +5,7 @@
 
 import React, { useState } from 'react';
 import { Database, Copy, Check, Terminal, ExternalLink, Activity } from 'lucide-react';
-import { SUPABASE_SQL_SCHEMA } from '../mockData';
+import { SUPABASE_SQL_SCHEMA } from '../supabaseSchema';
 import { supabase } from '../supabaseClient';
 
 export default function DatabaseSchemaView() {

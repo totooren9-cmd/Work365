@@ -42,17 +42,6 @@ import DatabaseSchemaView from './components/DatabaseSchemaView';
 import QrScannerModal from './components/QrScannerModal';
 import ReportsCenterView from './components/ReportsCenterView';
 
-// Import Initial Data and Types
-import { 
-  INITIAL_MACHINERY, 
-  INITIAL_TASKS, 
-  INITIAL_STOCK, 
-  INITIAL_ISSUANCES, 
-  INITIAL_REPAIRS, 
-  INITIAL_REFUELS, 
-  INITIAL_EXPENSES 
-} from './mockData';
-
 import { 
   HeavyMachinery, 
   WorkScheduleTask, 
@@ -88,48 +77,6 @@ import {
 import { Html5QrcodeScanner } from 'html5-qrcode';
 import { toUUID } from './utils/uuid';
 import { QrCode, Cloud, CloudOff, RefreshCw } from 'lucide-react';
-
-const APPS_INITIAL_MACHINERY = INITIAL_MACHINERY.map(m => ({
-  ...m,
-  id: toUUID(m.id)
-}));
-
-const APPS_INITIAL_TASKS = INITIAL_TASKS.map(t => ({
-  ...t,
-  id: toUUID(t.id),
-  machineryId: t.machineryId ? toUUID(t.machineryId) : undefined
-}));
-
-const APPS_INITIAL_STOCK = INITIAL_STOCK.map(s => ({
-  ...s,
-  id: toUUID(s.id)
-}));
-
-const APPS_INITIAL_ISSUANCES = INITIAL_ISSUANCES.map(i => ({
-  ...i,
-  id: toUUID(i.id),
-  itemId: toUUID(i.itemId)
-}));
-
-// APPS_INITIAL_ATTENDANCE_LOGS is disabled to avoid loading local mock attendance lists
-
-const APPS_INITIAL_REPAIRS = INITIAL_REPAIRS.map(r => ({
-  ...r,
-  id: toUUID(r.id),
-  machineryId: toUUID(r.machineryId)
-}));
-
-const APPS_INITIAL_REFUELS = INITIAL_REFUELS.map(rf => ({
-  ...rf,
-  id: toUUID(rf.id),
-  machineryId: toUUID(rf.machineryId)
-}));
-
-const APPS_INITIAL_EXPENSES = INITIAL_EXPENSES.map(e => ({
-  ...e,
-  id: toUUID(e.id),
-  machineryId: e.machineryId ? toUUID(e.machineryId) : undefined
-}));
 
 export default function App() {
   // Theme state (yellow, blue, green, white - soft premium tones)
@@ -224,14 +171,14 @@ export default function App() {
   };
 
   // Core global shared list state
-  const [machinery, setMachinery] = useState<HeavyMachinery[]>(APPS_INITIAL_MACHINERY);
-  const [tasks, setTasks] = useState<WorkScheduleTask[]>(APPS_INITIAL_TASKS);
-  const [stocks, setStocks] = useState<StockItem[]>(APPS_INITIAL_STOCK);
-  const [issuances, setIssuances] = useState<InventoryIssuance[]>(APPS_INITIAL_ISSUANCES);
+  const [machinery, setMachinery] = useState<HeavyMachinery[]>([]);
+  const [tasks, setTasks] = useState<WorkScheduleTask[]>([]);
+  const [stocks, setStocks] = useState<StockItem[]>([]);
+  const [issuances, setIssuances] = useState<InventoryIssuance[]>([]);
   const [attendances, setAttendances] = useState<AttendanceLog[]>([]);
-  const [repairs, setRepairs] = useState<RepairRequest[]>(APPS_INITIAL_REPAIRS);
-  const [refuels, setRefuels] = useState<RefuelStatus[]>(APPS_INITIAL_REFUELS);
-  const [expenses, setExpenses] = useState<ExpenseRecord[]>(APPS_INITIAL_EXPENSES);
+  const [repairs, setRepairs] = useState<RepairRequest[]>([]);
+  const [refuels, setRefuels] = useState<RefuelStatus[]>([]);
+  const [expenses, setExpenses] = useState<ExpenseRecord[]>([]);
 
   // Supabase Loading status
   const [dbLoading, setDbLoading] = useState(true);
@@ -270,18 +217,18 @@ export default function App() {
           getExpenses()
         ]);
 
-        setMachinery(loadedMach || INITIAL_MACHINERY);
-        setTasks(loadedTasks || INITIAL_TASKS);
-        setStocks(loadedStocks || INITIAL_STOCK);
+        setMachinery(loadedMach || []);
+        setTasks(loadedTasks || []);
+        setStocks(loadedStocks || []);
         setAttendances(loadedAttendances || []);
-        setRepairs(loadedRepairs || INITIAL_REPAIRS);
-        setExpenses(loadedExpenses || INITIAL_EXPENSES);
+        setRepairs(loadedRepairs || []);
+        setExpenses(loadedExpenses || []);
 
-        const loadedIssuances = await getIssuances(loadedStocks || INITIAL_STOCK);
-        const loadedRefuels = await getRefuels(loadedMach || INITIAL_MACHINERY);
+        const loadedIssuances = await getIssuances(loadedStocks || []);
+        const loadedRefuels = await getRefuels(loadedMach || []);
 
-        setIssuances(loadedIssuances || INITIAL_ISSUANCES);
-        setRefuels(loadedRefuels || INITIAL_REFUELS);
+        setIssuances(loadedIssuances || []);
+        setRefuels(loadedRefuels || []);
 
         if (loadedMach && loadedMach.length > 0) {
           checkAllMachinesPm(loadedMach);

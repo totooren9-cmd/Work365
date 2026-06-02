@@ -15,7 +15,8 @@ import {
   Filter, 
   FileSpreadsheet, 
   Zap, 
-  Send 
+  Send,
+  Camera 
 } from 'lucide-react';
 import { ExpenseRecord, HeavyMachinery } from '../types';
 
@@ -38,6 +39,8 @@ export default function ExpenseTrackerView({ expenses, machinery, onAddExpense, 
   const [formLoc, setFormLoc] = useState('ไซต์ก่อสร้างลำพูน ไฮเทค');
   const [formMach, setFormMach] = useState('');
   const [formRecorder, setFormRecorder] = useState('อาร์ต ผู้คุมบัญชีหลัก');
+  const [uploadedReceipt, setUploadedReceipt] = useState<string>('');
+  const [isUploading, setIsUploading] = useState<boolean>(false);
 
   // AI Cost Advisor Chat Emulator State
   const [aiChatInput, setAiChatInput] = useState('');
@@ -74,16 +77,51 @@ export default function ExpenseTrackerView({ expenses, machinery, onAddExpense, 
   }, [expenses, searchTerm, categoryFilter]);
 
   // Form submission handler
-  const handleAddNewExpense = (e: React.FormEvent) => {
+  const handleAddNewExpense = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!formDesc || formAmount <= 0) return;
 
+    setIsUploading(true);
+    let finalReceiptPhoto = '';
+    const displayId = `EXP-${Math.floor(Math.random() * 9000) + 1000}`;
+
+    if (uploadedReceipt) {
+      try {
+        const { uploadFileAndNotify } = await import('../utils/lineNotify');
+        finalReceiptPhoto = await uploadFileAndNotify({
+          image: uploadedReceipt,
+          module: 'แนบเอกสาร',
+          docId: displayId,
+          uploadBy: formRecorder,
+          status: `ยื่นแนบเอกสารค่าใช้จ่ายจริง: ${formDesc} (ยอดเงิน ฿${formAmount})`
+        });
+      } catch (err) {
+        console.error("Google Drive upload for expense receipt failed:", err);
+      }
+    } else {
+      try {
+        const { sendGoogleDriveLineNotification } = await import('../utils/lineNotify');
+        const thaiDate = new Date().toLocaleDateString('th-TH') + ' ' + new Date().toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' }) + ' น.';
+        await sendGoogleDriveLineNotification({
+          docId: displayId,
+          jobType: 'แนบเอกสาร',
+          operator: formRecorder,
+          timestamp: thaiDate,
+          status: `บันทึกรายการบัญชีใหม่: ${formDesc} (฿${formAmount})`,
+          imageUrl: undefined
+        });
+      } catch (e) {
+        console.warn(e);
+      }
+    }
+
     const newExp: ExpenseRecord = {
-      id: `exp-${Math.floor(Math.random() * 900) + 100}`,
+      id: displayId,
       date: new Date().toISOString().split('T')[0],
-      category: formCategory,
+      category: formCategory as any,
       description: formDesc,
       amount: Number(formAmount),
+      receiptPhoto: finalReceiptPhoto || undefined,
       siteLocation: formLoc,
       recordedBy: formRecorder,
       machineryId: formMach || undefined
@@ -95,6 +133,8 @@ export default function ExpenseTrackerView({ expenses, machinery, onAddExpense, 
     setFormDesc('');
     setFormAmount(0);
     setFormMach('');
+    setUploadedReceipt('');
+    setIsUploading(false);
     setShowAddForm(false);
   };
 
@@ -272,19 +312,70 @@ export default function ExpenseTrackerView({ expenses, machinery, onAddExpense, 
                   </div>
                 </div>
 
+                {/* Receipt Document Attachment */}
+                <div className="bg-stone-50 p-4 border border-dashed border-stone-300 rounded-xl" id="expense-document-uploader">
+                  <span className="block text-xs font-medium text-stone-700 mb-1">📷 แนบไฟล์รูปและเอกสารใบกำกับภาษี/บิลเงินสด (อัปโหลดเข้า Google Drive อัตโนมัติ)</span>
+                  <div className="flex items-center gap-4 mt-2">
+                    <label className="flex flex-col items-center justify-center bg-white border border-stone-200 rounded-lg p-3 cursor-pointer hover:border-orange-500 transition-colors w-24 h-20 text-center shrink-0">
+                      <Camera className="w-5 h-5 text-stone-500 mb-1" />
+                      <span className="text-[10px] text-stone-500">เลือกไฟล์</span>
+                      <input
+                        id="expense-receipt-input"
+                        type="file"
+                        accept="image/*"
+                        className="hidden"
+                        onChange={(e) => {
+                          const file = e.target.files?.[0];
+                          if (file) {
+                            const rd = new FileReader();
+                            rd.onload = () => setUploadedReceipt(rd.result as string);
+                            rd.readAsDataURL(file);
+                          }
+                        }}
+                      />
+                    </label>
+
+                    {uploadedReceipt ? (
+                      <div className="relative w-24 h-20 border border-stone-200 rounded-lg overflow-hidden group">
+                        <img src={uploadedReceipt} alt="Receipt Preview" className="w-full h-full object-cover" />
+                        <button
+                          type="button"
+                          onClick={() => setUploadedReceipt('')}
+                          className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white text-[10px] font-bold"
+                        >
+                          ลบรูป
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="text-[11px] text-stone-400">
+                        ยังไม่ได้อัปโหลดเอกสารประกอบ ระบบจัดเตรียมโฟลเดอร์แยกหมวดหมู่ /แนบเอกสาร/{new Date().getFullYear()}/{String(new Date().getMonth()+1).padStart(2, '0')} บน Google Drive
+                      </div>
+                    )}
+                  </div>
+                </div>
+
                 <div className="flex justify-end gap-2 pt-2">
                   <button
                     type="button"
                     onClick={() => setShowAddForm(false)}
-                    className="bg-stone-50 hover:bg-stone-50 text-stone-500 hover:text-stone-700 px-4 py-2 rounded-xl text-xs font-semibold"
+                    disabled={isUploading}
+                    className="bg-stone-50 hover:bg-stone-50 text-stone-500 hover:text-stone-700 px-4 py-2 rounded-xl text-xs font-semibold disabled:opacity-50"
                   >
                     ยกเลิก
                   </button>
                   <button
                     type="submit"
-                    className="bg-orange-500 hover:bg-orange-600 text-white px-5 py-2 rounded-xl text-xs font-semibold shadow"
+                    disabled={isUploading}
+                    className="bg-orange-500 hover:bg-orange-600 text-white px-5 py-2 rounded-xl text-xs font-semibold shadow disabled:opacity-75 flex items-center gap-1.5"
                   >
-                    บันทึกงบทันทีกระทบยอด
+                    {isUploading ? (
+                      <>
+                        <div className="animate-spin rounded-full h-3 w-3 border-2 border-white border-t-transparent"></div>
+                        กำลังอัปโหลดเอกสารสำเร็จ...
+                      </>
+                    ) : (
+                      "บันทึกงบทันทีกระทบยอด"
+                    )}
                   </button>
                 </div>
               </form>
@@ -318,7 +409,19 @@ export default function ExpenseTrackerView({ expenses, machinery, onAddExpense, 
                           </span>
                         </td>
                         <td className="py-3 font-medium max-w-[200px] truncate" title={exp.description}>
-                          {exp.description}
+                          <div className="flex items-center gap-2">
+                            {exp.receiptPhoto && (
+                              <img 
+                                src={exp.receiptPhoto} 
+                                alt="Receipt Thumbnail" 
+                                className="w-5 h-5 rounded object-cover cursor-pointer hover:scale-125 transition-transform border border-stone-200 shrink-0"
+                                onClick={() => window.open(exp.receiptPhoto, '_blank')}
+                                referrerPolicy="no-referrer"
+                                title="คลิกเพื่อดูไฟล์บน Google Drive"
+                              />
+                            )}
+                            <span className="truncate">{exp.description}</span>
+                          </div>
                         </td>
                         <td className="py-3 text-right font-mono font-black text-stone-800">
                           {exp.amount.toLocaleString()}

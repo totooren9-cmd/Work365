@@ -17,6 +17,7 @@ import {
   Smartphone
 } from 'lucide-react';
 import { AttendanceLog } from '../types';
+import { uploadFileAndNotify } from '../utils/lineNotify';
 
 interface AttendanceViewProps {
   attendances: AttendanceLog[];
@@ -224,23 +225,34 @@ export default function AttendanceView({ attendances, onAddAttendance, onUpdateA
 
     setUploadingPhoto(true);
     let finalPhotoUrl = photoSim;
+    const docId = `CI-${Date.now().toString().slice(-4)}`;
 
-    // If the check-in photo is a base64 string, upload it to Express to convert to a public absolute URL
     if (photoSim.startsWith('data:')) {
       try {
-        const response = await fetch('/api/upload-photo', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ image: photoSim })
+        finalPhotoUrl = await uploadFileAndNotify({
+          image: photoSim,
+          module: 'Checkin',
+          docId,
+          uploadBy: workName,
+          status: `เข้างาพิกัดสแกน: ${workSite}`
         });
-        if (response.ok) {
-          const resData = await response.json();
-          if (resData.success && resData.url) {
-            finalPhotoUrl = resData.url.startsWith('http') ? resData.url : `${window.location.origin}${resData.url}`;
-          }
-        }
       } catch (err) {
-        console.error("Failed to upload check-in photo to public API server:", err);
+        console.error("Failed to upload check-in photo:", err);
+      }
+    } else {
+      try {
+        const { sendGoogleDriveLineNotification } = await import('../utils/lineNotify');
+        const thaiDate = new Date().toLocaleDateString('th-TH') + ' ' + new Date().toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' }) + ' น.';
+        await sendGoogleDriveLineNotification({
+          docId,
+          jobType: 'Check In',
+          operator: workName,
+          timestamp: thaiDate,
+          status: `เข้างาพิกัดสแกน: ${workSite} (ไม่ได้อัดกล้องจริง)`,
+          imageUrl: finalPhotoUrl
+        });
+      } catch (e) {
+        console.warn("Direct notification failed", e);
       }
     }
 
@@ -271,23 +283,34 @@ export default function AttendanceView({ attendances, onAddAttendance, onUpdateA
 
     setUploadingPhoto(true);
     let finalPhotoUrlOut = checkOutPhoto || selectedLog.photoUrl;
+    const docId = `CO-${Date.now().toString().slice(-4)}`;
 
-    // If the check-out photo is a base64 string, upload it to Express to convert to a public absolute URL
     if (finalPhotoUrlOut.startsWith('data:')) {
       try {
-        const response = await fetch('/api/upload-photo', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ image: finalPhotoUrlOut })
+        finalPhotoUrlOut = await uploadFileAndNotify({
+          image: finalPhotoUrlOut,
+          module: 'Checkout',
+          docId,
+          uploadBy: selectedLog.employeeName,
+          status: `ออกงานพิกัดสแกน: ${selectedLog.siteName}`
         });
-        if (response.ok) {
-          const resData = await response.json();
-          if (resData.success && resData.url) {
-            finalPhotoUrlOut = resData.url.startsWith('http') ? resData.url : `${window.location.origin}${resData.url}`;
-          }
-        }
       } catch (err) {
-        console.error("Failed to upload check-out photo to public API server:", err);
+        console.error("Failed to upload check-out photo:", err);
+      }
+    } else {
+      try {
+        const { sendGoogleDriveLineNotification } = await import('../utils/lineNotify');
+        const thaiDate = new Date().toLocaleDateString('th-TH') + ' ' + new Date().toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' }) + ' น.';
+        await sendGoogleDriveLineNotification({
+          docId,
+          jobType: 'Check Out',
+          operator: selectedLog.employeeName,
+          timestamp: thaiDate,
+          status: `ออกงานพิกัดสแกน: ${selectedLog.siteName} (ไม่ได้อัดกล้องจริง)`,
+          imageUrl: finalPhotoUrlOut
+        });
+      } catch (e) {
+        console.warn("Direct notification failed", e);
       }
     }
 

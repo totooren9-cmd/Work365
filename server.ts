@@ -12,10 +12,76 @@ function bufferToStream(buffer: Buffer) {
   return stream;
 }
 
+const MODULE_FOLDER_MAPPING: Record<string, string> = {
+  "แจ้งซ่อม": "แจ้งซ่อม",
+  "ส่งงานช่าง": "ส่งงานช่าง",
+  "เติมน้ำมัน": "เติมน้ำมัน",
+  "Check In GPS": "Checkin",
+  "Checkin": "Checkin",
+  "Check-In": "Checkin",
+  "Check Out GPS": "Checkout",
+  "Checkout": "Checkout",
+  "Check-Out": "Checkout",
+  "แนบเอกสาร": "แนบเอกสาร",
+  "expenses": "แนบเอกสาร",
+  "Expenses": "แนบเอกสาร"
+};
+
+function getThaiFormattedNow() {
+  const d = new Date();
+  // Adjust to UTC+7 (Thailand)
+  const tzOffset = 7 * 60 * 60 * 1000;
+  const localTime = new Date(d.getTime() + tzOffset);
+  
+  const yyyy = localTime.getUTCFullYear();
+  const mm = String(localTime.getUTCMonth() + 1).padStart(2, "0");
+  const dd = String(localTime.getUTCDate()).padStart(2, "0");
+  
+  const hh = String(localTime.getUTCHours()).padStart(2, "0");
+  const min = String(localTime.getUTCMinutes()).padStart(2, "0");
+  const ss = String(localTime.getUTCSeconds()).padStart(2, "0");
+  
+  return {
+    year: String(yyyy),
+    month: mm,
+    dateStr: `${yyyy}${mm}${dd}`,
+    timeStr: `${hh}${min}${ss}`,
+    fullDateTime: `${yyyy}-${mm}-${dd} ${hh}:${min}:${ss}`
+  };
+}
+
+async function getOrCreateFolder(drive: any, folderName: string, parentId: string): Promise<string> {
+  const q = `name = '${folderName}' and mimeType = 'application/vnd.google-apps.folder' and '${parentId}' in parents and trashed = false`;
+  const res = await drive.files.list({
+    q,
+    fields: "files(id)",
+    spaces: "drive",
+  });
+  if (res.data.files && res.data.files.length > 0) {
+    return res.data.files[0].id;
+  }
+  
+  const fileMetadata = {
+    name: folderName,
+    mimeType: "application/vnd.google-apps.folder",
+    parents: [parentId]
+  };
+  const folder = await drive.files.create({
+    requestBody: fileMetadata,
+    fields: "id"
+  });
+  return folder.data.id!;
+}
+
 // Function to upload to Google Drive
-async function uploadToGoogleDrive(buffer: Buffer, filename: string, mimeType: string): Promise<{ success: boolean; url?: string; fileId?: string; error?: string }> {
+async function uploadToGoogleDrive(
+  buffer: Buffer, 
+  filename: string, 
+  mimeType: string,
+  moduleName: string
+): Promise<{ success: boolean; url?: string; fileId?: string; error?: string }> {
   try {
-    const GOOGLE_DRIVE_FOLDER_ID = process.env.GOOGLE_DRIVE_FOLDER_ID || "1HgfXlXZ4tzFOTQtpvVwG8FDOP0Wk1kje";
+    const GOOGLE_DRIVE_FOLDER_ID = "1yT9jpH63ZZCF-Dt5kz9rjKJfQv1pyC6m";
     
     // Auth client uses Application Default Credentials automatically or looks at environment variables
     const auth = new google.auth.GoogleAuth({
@@ -27,9 +93,17 @@ async function uploadToGoogleDrive(buffer: Buffer, filename: string, mimeType: s
     
     const drive = google.drive({ version: "v3", auth });
     
+    // Organize cascade structure: Root -> Module Folder -> Year -> Month
+    const dNow = getThaiFormattedNow();
+    const folderLabel = MODULE_FOLDER_MAPPING[moduleName] || moduleName || "Other";
+    
+    const moduleFolderId = await getOrCreateFolder(drive, folderLabel, GOOGLE_DRIVE_FOLDER_ID);
+    const yearFolderId = await getOrCreateFolder(drive, dNow.year, moduleFolderId);
+    const finalFolderId = await getOrCreateFolder(drive, dNow.month, yearFolderId);
+
     const fileMetadata = {
       name: filename,
-      parents: [GOOGLE_DRIVE_FOLDER_ID]
+      parents: [finalFolderId]
     };
     
     const media = {
@@ -93,7 +167,7 @@ async function startServer() {
   // API to upload base64 photo and get a public URL
   app.post("/api/upload-photo", async (req, res) => {
     try {
-      const { image } = req.body;
+      const { image, module: moduleName = "Other", docId = "DOC", uploadBy = "System" } = req.body;
       if (!image || !image.startsWith("data:")) {
         return res.status(400).json({ error: "Invalid image format. Must be base64 data URL." });
       }
@@ -110,26 +184,29 @@ async function startServer() {
       const photoId = `${Date.now()}_${Math.random().toString(36).substring(2, 10)}`;
       photosMap.set(photoId, { buffer, mimeType });
 
+      // Format custom file name: ประเภทงาน_เลขที่เอกสาร_YYYYMMDD_HHMMSS.jpg
+      const dNow = getThaiFormattedNow();
+      const folderLabel = MODULE_FOLDER_MAPPING[moduleName] || moduleName;
+      const sanitizedDocId = String(docId).replace(/[^a-zA-Z0-9-]/g, "_");
+      const filename = `${folderLabel}_${sanitizedDocId}_${dNow.dateStr}_${dNow.timeStr}.jpg`;
+
       // Run Google Drive upload
-      const filename = `attendance_${photoId}.jpg`;
-      const driveResult = await uploadToGoogleDrive(buffer, filename, mimeType);
+      const driveResult = await uploadToGoogleDrive(buffer, filename, mimeType, moduleName);
 
-      if (driveResult.success && driveResult.url) {
-        return res.json({
-          success: true,
-          photoId,
-          url: driveResult.url,
-          source: "google-drive"
-        });
-      }
-
-      // Fallback url
-      res.json({ 
-        success: true, 
+      const responsePayload = {
+        success: true,
         photoId,
-        url: `/api/photo/${photoId}.jpg`,
-        source: "local-fallback"
-      });
+        url: driveResult.success && driveResult.url ? driveResult.url : `/api/photo/${photoId}.jpg`,
+        fileId: driveResult.success ? driveResult.fileId : `local_fallback_${photoId}`,
+        fileName: filename,
+        uploadDate: new Date().toISOString(),
+        uploadBy,
+        module: folderLabel,
+        documentNo: docId,
+        source: driveResult.success ? "google-drive" : "local-fallback"
+      };
+
+      res.json(responsePayload);
     } catch (error: any) {
       console.error("Upload photo error:", error);
       res.status(500).json({ error: error?.message || "Internal server error" });

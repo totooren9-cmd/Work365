@@ -21,6 +21,7 @@ import {
   Sparkles
 } from 'lucide-react';
 import { RepairRequest, HeavyMachinery } from '../types';
+import { uploadFileAndNotify } from '../utils/lineNotify';
 
 interface RepairViewProps {
   repairs: RepairRequest[];
@@ -63,6 +64,8 @@ export default function RepairView({
   const [repUrgency, setRepUrgency] = useState<'low' | 'medium' | 'high' | 'critical'>('high');
   const [repHour, setRepHour] = useState(5000);
   const [repGps, setRepGps] = useState('18.7904, 98.9841 (หน้างานคลองส่งน้ำพืชสวนโลก)');
+  const [uploadedPhotoBase64, setUploadedPhotoBase64] = useState<string>('');
+  const [isUploadingPhoto, setIsUploadingPhoto] = useState<boolean>(false);
 
   // Signature canvas ref
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -151,12 +154,45 @@ export default function RepairView({
   }, [selectedRepairId, isDrawing]);
 
   // Form Submission
-  const handleAddNewRepair = (e: React.FormEvent) => {
+  const handleAddNewRepair = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!repDesc) return;
 
+    setIsUploadingPhoto(true);
+    let finalPhoto = 'https://images.unsplash.com/photo-1516321318423-f06f85e504b3?auto=format&fit=crop&q=80&w=400';
+    const repId = `REP-${Math.floor(Math.random() * 9000) + 1000}`;
+
+    if (uploadedPhotoBase64) {
+      try {
+        finalPhoto = await uploadFileAndNotify({
+          image: uploadedPhotoBase64,
+          module: 'แจ้งซ่อม',
+          docId: repId,
+          uploadBy: repReporter,
+          status: 'ยื่นแจ้งซ่อมฉุกเฉินสำเร็จ'
+        });
+      } catch (err) {
+        console.error("Google Drive / LINE upload failed:", err);
+      }
+    } else {
+      try {
+        const { sendGoogleDriveLineNotification } = await import('../utils/lineNotify');
+        const thaiDate = new Date().toLocaleDateString('th-TH') + ' ' + new Date().toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' }) + ' น.';
+        await sendGoogleDriveLineNotification({
+          docId: repId,
+          jobType: 'แจ้งซ่อม',
+          operator: repReporter,
+          timestamp: thaiDate,
+          status: 'ยื่นแจ้งซ่อมใหม่ (ไม่ได้แนบภาพ)',
+          imageUrl: finalPhoto
+        });
+      } catch (err) {
+        console.error("Failed directly sending notifications:", err);
+      }
+    }
+
     const newRep: RepairRequest = {
-      id: `rep-${Math.floor(Math.random() * 900) + 100}`,
+      id: repId,
       machineryId: repMachId,
       reporterName: repReporter,
       problemDesc: repDesc,
@@ -164,7 +200,7 @@ export default function RepairView({
       gpsLoc: repGps,
       status: 'reported',
       hoursMeterRecorded: Number(repHour),
-      photoUrl: 'https://images.unsplash.com/photo-1516321318423-f06f85e504b3?auto=format&fit=crop&q=80&w=400',
+      photoUrl: finalPhoto,
       checklist: [
         { task: 'ตรวจเช็คแก้มวาล์วรั่วซึมฝาหัวฉีด', done: false },
         { task: 'วัดแรงคลายกำลังอัดท่อนไฮดรอก', done: false },
@@ -177,6 +213,8 @@ export default function RepairView({
     setSelectedRepairId(newRep.id);
     handleCloseForm();
     setRepDesc('');
+    setUploadedPhotoBase64('');
+    setIsUploadingPhoto(false);
   };
 
   // Updates jobsheet active checklists on/off
@@ -328,19 +366,70 @@ export default function RepairView({
                   />
                 </div>
 
+                {/* Custom File Upload & Preview Section */}
+                <div className="bg-stone-50 p-4 border border-dashed border-stone-300 rounded-xl" id="repair-photo-uploader">
+                  <span className="block text-xs font-medium text-stone-700 mb-1">📷 แนบรูปภาพแจ้งซ่อม (ส่งเข้าระบบจัดการแยกโฟลเดอร์ Google Drive อัตโนมัติ)</span>
+                  <div className="flex items-center gap-4 mt-2">
+                    <label className="flex flex-col items-center justify-center bg-white border border-stone-200 rounded-lg p-3 cursor-pointer hover:border-orange-500 transition-colors w-24 h-20 text-center shrink-0">
+                      <Camera className="w-5 h-5 text-stone-500 mb-1" />
+                      <span className="text-[10px] text-stone-500">เลือกไฟล์</span>
+                      <input
+                        id="repair-file-input"
+                        type="file"
+                        accept="image/*"
+                        className="hidden"
+                        onChange={(e) => {
+                          const file = e.target.files?.[0];
+                          if (file) {
+                            const rd = new FileReader();
+                            rd.onload = () => setUploadedPhotoBase64(rd.result as string);
+                            rd.readAsDataURL(file);
+                          }
+                        }}
+                      />
+                    </label>
+                    
+                    {uploadedPhotoBase64 ? (
+                      <div className="relative w-24 h-20 border border-stone-200 rounded-lg overflow-hidden group">
+                        <img src={uploadedPhotoBase64} alt="Preview" className="w-full h-full object-cover" />
+                        <button
+                          type="button"
+                          onClick={() => setUploadedPhotoBase64('')}
+                          className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white text-[10px] font-bold"
+                        >
+                          ลบรูปภาพ
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="text-[11px] text-stone-400">
+                        ยังไม่ได้แนบรูปภาพประกอบความชำรุด ระบบพร้อมจัดกลุ่มพิกัดและสร้างโฟลเดอร์ /แจ้งซ่อม/{new Date().getFullYear()}/{String(new Date().getMonth()+1).padStart(2, '0')} บน Google Drive
+                      </div>
+                    )}
+                  </div>
+                </div>
+
                 <div className="flex justify-end gap-2 pt-2">
                   <button
                     type="button"
                     onClick={handleCloseForm}
-                    className="bg-stone-50 hover:bg-stone-50 text-stone-500 hover:text-stone-700 px-4 py-2 rounded-xl text-xs font-semibold"
+                    disabled={isUploadingPhoto}
+                    className="bg-stone-50 hover:bg-stone-50 text-stone-500 hover:text-stone-700 px-4 py-2 rounded-xl text-xs font-semibold disabled:opacity-50"
                   >
                     ยกเลิก
                   </button>
                   <button
                     type="submit"
-                    className="bg-orange-500 hover:bg-orange-600 text-white px-5 py-2 rounded-xl text-xs font-semibold shadow"
+                    disabled={isUploadingPhoto}
+                    className="bg-orange-500 hover:bg-orange-600 text-white px-5 py-2 rounded-xl text-xs font-semibold shadow disabled:opacity-75 flex items-center gap-1.5"
                   >
-                    ยื่นบันทึกใบแจ้งซ่อม
+                    {isUploadingPhoto ? (
+                      <>
+                        <div className="animate-spin rounded-full h-3 h-3 border-2 border-white border-t-transparent"></div>
+                        กำลังอัปโหลดรูปภาพไปยัง Google Drive...
+                      </>
+                    ) : (
+                      "ยื่นบันทึกใบแจ้งซ่อม"
+                    )}
                   </button>
                 </div>
               </form>
@@ -419,6 +508,24 @@ export default function RepairView({
                   <Trash2 className="w-3.5 h-3.5" />
                 </button>
               </div>
+
+              {/* Photo preview of the machinery issue */}
+              {selectedRepair.photoUrl && (
+                <div className="rounded-xl overflow-hidden border border-stone-200" id="repair-sidebar-photo-preview">
+                  <span className="block bg-stone-100/75 text-[9px] font-bold text-stone-600 px-3 py-1 border-b border-stone-200 uppercase tracking-widest flex items-center gap-1">
+                    <Camera className="w-3 h-3 text-orange-500" /> รูปภาพรายงานปัญหา (Google Drive)
+                  </span>
+                  <div className="relative h-28 bg-stone-150">
+                    <img 
+                      src={selectedRepair.photoUrl} 
+                      alt="Machinery issue preview" 
+                      className="w-full h-full object-cover cursor-pointer hover:scale-105 transition-transform" 
+                      onClick={() => window.open(selectedRepair.photoUrl, '_blank')}
+                      referrerPolicy="no-referrer"
+                    />
+                  </div>
+                </div>
+              )}
 
               {/* Status workflow view */}
               <div className="bg-white/40 p-3 rounded-xl space-y-2 text-[11px] leading-relaxed text-stone-600">

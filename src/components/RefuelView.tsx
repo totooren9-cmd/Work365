@@ -21,7 +21,7 @@ import {
   Image as ImageIcon 
 } from 'lucide-react';
 import { RefuelStatus, HeavyMachinery, ExpenseRecord } from '../types';
-import { sendLineFuelNotification } from '../utils/lineNotify';
+import { sendLineFuelNotification, uploadFileAndNotify } from '../utils/lineNotify';
 
 interface RefuelViewProps {
   refuels: RefuelStatus[];
@@ -45,6 +45,12 @@ export default function RefuelView({ refuels, machinery, onAddRefuel, onUpdateRe
   const [newReqName, setNewReqName] = useState('นายมานะ เจริญพานิช');
   const [newReqHour, setNewReqHour] = useState(2500);
 
+  // Photo states
+  const [requestPhotoBase64, setRequestPhotoBase64] = useState<string>('');
+  const [executePhotoBase64, setExecutePhotoBase64] = useState<string>('');
+  const [isUploadingRequest, setIsUploadingRequest] = useState<boolean>(false);
+  const [isUploadingExecute, setIsUploadingExecute] = useState<boolean>(false);
+
   // Execution Refueling Actual form states
   const [actLiters, setActLiters] = useState(100);
   const [actPrice, setActPrice] = useState(3350);
@@ -57,16 +63,49 @@ export default function RefuelView({ refuels, machinery, onAddRefuel, onUpdateRe
   }, [refuels, selectedRefuelId]);
 
   // Handle Fuel Requisition Creation
-  const handleCreateRequest = (e: React.FormEvent) => {
+  const handleCreateRequest = async (e: React.FormEvent) => {
     e.preventDefault();
     const targetedMach = machinery.find(m => m.id === newReqMachId);
     if (!targetedMach) return;
 
+    setIsUploadingRequest(true);
+
     const formattedDate = new Date().toISOString().replace('T', ' ').slice(0, 16);
     const generatedDocNo = `FL-${new Date().toISOString().split('T')[0].replace(/-/g, '')}-${Math.floor(Math.random() * 900) + 100}`;
+    const targetId = `f-${Date.now()}`;
+
+    let mileagePhotoUrl = 'https://images.unsplash.com/photo-1563986768609-322da13575f3?auto=format&fit=crop&q=80&w=300';
+    if (requestPhotoBase64) {
+      try {
+        mileagePhotoUrl = await uploadFileAndNotify({
+          image: requestPhotoBase64,
+          module: 'เติมน้ำมัน',
+          docId: generatedDocNo,
+          uploadBy: newReqName,
+          status: 'ยื่นคำขออนุมัติเติมน้ำมันสำเร็จ'
+        });
+      } catch (err) {
+        console.error("Google Drive upload for fuel request photo failed:", err);
+      }
+    } else {
+      try {
+        const { sendGoogleDriveLineNotification } = await import('../utils/lineNotify');
+        const thaiDate = new Date().toLocaleDateString('th-TH') + ' ' + new Date().toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' }) + ' น.';
+        await sendGoogleDriveLineNotification({
+          docId: generatedDocNo,
+          jobType: 'ขออนุมัติเติมน้ำมัน',
+          operator: newReqName,
+          timestamp: thaiDate,
+          status: 'รอยื่นขออนุมัติเติมน้ำมันน้ำเชื้อเพลิง (ไม่ได้แนบรูป)',
+          imageUrl: mileagePhotoUrl
+        });
+      } catch (e) {
+         console.warn("Direct notification failed", e);
+      }
+    }
 
     const newReq: RefuelStatus = {
-      id: `f-${Date.now()}`,
+      id: targetId,
       documentNo: generatedDocNo,
       date: formattedDate,
       machineryId: newReqMachId,
@@ -76,17 +115,16 @@ export default function RefuelView({ refuels, machinery, onAddRefuel, onUpdateRe
       pricePerLiter: Number(newReqPrice),
       siteLocation: newReqSite,
       requesterName: newReqName,
-      mileagePhoto: 'https://images.unsplash.com/photo-1563986768609-322da13575f3?auto=format&fit=crop&q=80&w=300',
+      mileagePhoto: mileagePhotoUrl,
       hourMeterValue: Number(newReqHour),
       status: 'pending_approval'
     };
 
     onAddRefuel(newReq);
-    sendLineFuelNotification(newReq, machinery).catch(err => {
-      console.error("Error sending LINE notification for fuel request:", err);
-    });
     setSelectedRefuelId(newReq.id);
     setShowReqForm(false);
+    setRequestPhotoBase64('');
+    setIsUploadingRequest(false);
   };
 
   // State workflow change: Approve requests to fill
@@ -102,31 +140,58 @@ export default function RefuelView({ refuels, machinery, onAddRefuel, onUpdateRe
   };
 
   // Execute Actual Fueling Form
-  const handleExecuteRefuel = (e: React.FormEvent) => {
+  const handleExecuteRefuel = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedTicket) return;
+
+    setIsUploadingExecute(true);
 
     const computedPrice = Number(actLiters) * selectedTicket.pricePerLiter;
     const finalActualPrice = actPrice || computedPrice;
 
-    // Complete refueling ticket
+    let receiptUrl = 'https://images.unsplash.com/photo-1554415707-6e8cfc93fe23?auto=format&fit=crop&q=80&w=300';
+    if (executePhotoBase64) {
+      try {
+        receiptUrl = await uploadFileAndNotify({
+          image: executePhotoBase64,
+          module: 'เติมน้ำมัน',
+          docId: selectedTicket.documentNo,
+          uploadBy: actOperator,
+          status: `ช่างเติมน้ำมันเสร็จสิ้นจริง ${actLiters} ลิตร`
+        });
+      } catch (err) {
+        console.error("Google Drive receipt upload failed:", err);
+      }
+    } else {
+      try {
+        const { sendGoogleDriveLineNotification } = await import('../utils/lineNotify');
+        const thaiDate = new Date().toLocaleDateString('th-TH') + ' ' + new Date().toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' }) + ' น.';
+        await sendGoogleDriveLineNotification({
+          docId: selectedTicket.documentNo,
+          jobType: 'เติมน้ำมัน',
+          operator: actOperator,
+          timestamp: thaiDate,
+          status: `เติมจริงเสร็จสมบูรณ์ ${actLiters} ลิตร (ไม่มีภาพใบเสร็จ)`,
+          imageUrl: receiptUrl
+        });
+      } catch (e) {
+         console.warn("Direct notification failed", e);
+      }
+    }
+
     const updatedTicket: RefuelStatus = {
       ...selectedTicket,
       status: 'completed',
       actualLiters: Number(actLiters),
       actualPrice: finalActualPrice,
       gasStationName: actStation,
-      receiptPhotoUrl: 'https://images.unsplash.com/photo-1554415707-6e8cfc93fe23?auto=format&fit=crop&q=80&w=300',
+      receiptPhotoUrl: receiptUrl,
       gpsLocFilled: '18.7911, 98.9852',
       operatorName: actOperator
     };
 
     onUpdateRefuel(updatedTicket);
-    sendLineFuelNotification(updatedTicket, machinery).catch(err => {
-      console.error("Error sending LINE notification for fuel execution completion:", err);
-    });
 
-    // Automatically trigger Expense record log summation
     const newExpense: ExpenseRecord = {
       id: `exp-${Date.now()}`,
       date: new Date().toISOString().split('T')[0],
@@ -135,7 +200,8 @@ export default function RefuelView({ refuels, machinery, onAddRefuel, onUpdateRe
       amount: finalActualPrice,
       siteLocation: selectedTicket.siteLocation,
       recordedBy: selectedTicket.requesterName,
-      machineryId: selectedTicket.machineryId
+      machineryId: selectedTicket.machineryId,
+      receiptPhoto: receiptUrl
     };
 
     onAddExpense(newExpense);
@@ -293,19 +359,70 @@ export default function RefuelView({ refuels, machinery, onAddRefuel, onUpdateRe
                   </div>
                 </div>
 
+                {/* Mileage Meter Photo Upload */}
+                <div className="bg-stone-50 p-4 border border-dashed border-stone-300 rounded-xl" id="fuel-mileage-uploader">
+                  <span className="block text-xs font-medium text-stone-700 mb-1">📷 รูปภาพไมล์หน้าปัดรถยนต์จริงประกอบ (จัดเก็บ Google Drive อัตโนมัติ)</span>
+                  <div className="flex items-center gap-4 mt-2">
+                    <label className="flex flex-col items-center justify-center bg-white border border-stone-200 rounded-lg p-3 cursor-pointer hover:border-orange-500 transition-colors w-24 h-20 text-center shrink-0">
+                      <Camera className="w-5 h-5 text-stone-500 mb-1" />
+                      <span className="text-[10px] text-stone-500">เลือกไฟล์</span>
+                      <input
+                        id="fuel-mileage-input"
+                        type="file"
+                        accept="image/*"
+                        className="hidden"
+                        onChange={(e) => {
+                          const file = e.target.files?.[0];
+                          if (file) {
+                            const rd = new FileReader();
+                            rd.onload = () => setRequestPhotoBase64(rd.result as string);
+                            rd.readAsDataURL(file);
+                          }
+                        }}
+                      />
+                    </label>
+                    
+                    {requestPhotoBase64 ? (
+                      <div className="relative w-24 h-20 border border-stone-200 rounded-lg overflow-hidden group">
+                        <img src={requestPhotoBase64} alt="Mileage Preview" className="w-full h-full object-cover" />
+                        <button
+                          type="button"
+                          onClick={() => setRequestPhotoBase64('')}
+                          className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white text-[10px] font-bold"
+                        >
+                          ลบรูป
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="text-[11px] text-stone-400">
+                        ยังไม่ได้แนบรูปถ่ายเรือนไมล์ ระบบพร้อมอัปโหลดและสร้างโฟลเดอร์แยกประเภท /เติมน้ำมัน/{new Date().getFullYear()}/{String(new Date().getMonth()+1).padStart(2, '0')} บน Google Drive
+                      </div>
+                    )}
+                  </div>
+                </div>
+
                 <div className="flex justify-end gap-2 pt-2">
                   <button
                     type="button"
                     onClick={() => setShowReqForm(false)}
-                    className="bg-stone-50 hover:bg-stone-50 text-stone-500 hover:text-stone-700 px-4 py-2 rounded-xl text-xs font-semibold"
+                    disabled={isUploadingRequest}
+                    className="bg-stone-50 hover:bg-stone-50 text-stone-500 hover:text-stone-700 px-4 py-2 rounded-xl text-xs font-semibold disabled:opacity-50"
                   >
                     ยกเลิก
                   </button>
                   <button
                     type="submit"
-                    className="bg-orange-500 hover:bg-orange-600 text-white px-5 py-2 rounded-xl text-xs font-semibold shadow"
+                    disabled={isUploadingRequest}
+                    className="bg-orange-500 hover:bg-orange-600 text-white px-5 py-2 rounded-xl text-xs font-semibold shadow disabled:opacity-75 flex items-center gap-1.5"
                   >
-                    ยื่นคำขอเบิกน้ำมัน (Print Voucher)
+                    {isUploadingRequest ? (
+                      <>
+                        <div className="animate-spin rounded-full h-3 w-3 border-2 border-white border-t-transparent"></div>
+                        กำลังอัปโหลดรูปภาพไมล์...
+                      </>
+                    ) : (
+                      "ยื่นคำขอเบิกน้ำมัน (Print Voucher)"
+                    )}
                   </button>
                 </div>
               </form>
@@ -504,28 +621,110 @@ export default function RefuelView({ refuels, machinery, onAddRefuel, onUpdateRe
                     />
                   </div>
 
+                  {/* Fuel Receipt Photo Upload Section */}
+                  <div className="bg-stone-50 border border-dashed border-stone-300 rounded-xl p-2.5 space-y-1.5" id="fuel-receipt-uploader">
+                    <span className="block text-[9px] font-bold text-stone-600 uppercase">📷 ภาพใบเสร็จรับเงิน/หน้าตู้น้ำมัน (Google Drive)</span>
+                    <div className="flex items-center gap-2.5">
+                      <label className="flex flex-col items-center justify-center bg-white border border-stone-200 rounded-lg p-2 cursor-pointer hover:border-orange-500 transition-colors w-20 h-16 text-center shrink-0">
+                        <Camera className="w-4 h-4 text-stone-500" />
+                        <span className="text-[8px] text-stone-500">เลือกรูป</span>
+                        <input
+                          id="fuel-receipt-input"
+                          type="file"
+                          accept="image/*"
+                          className="hidden"
+                          onChange={(e) => {
+                            const file = e.target.files?.[0];
+                            if (file) {
+                              const rd = new FileReader();
+                              rd.onload = () => setExecutePhotoBase64(rd.result as string);
+                              rd.readAsDataURL(file);
+                            }
+                          }}
+                        />
+                      </label>
+
+                      {executePhotoBase64 ? (
+                        <div className="relative w-20 h-16 border border-stone-200 rounded-lg overflow-hidden group">
+                          <img src={executePhotoBase64} alt="Receipt Preview" className="w-full h-full object-cover" />
+                          <button
+                            type="button"
+                            onClick={() => setExecutePhotoBase64('')}
+                            className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white text-[8px] font-bold"
+                          >
+                            ลบ
+                          </button>
+                        </div>
+                      ) : (
+                        <span className="text-[9px] text-stone-400 leading-tight">
+                          แนบรูปถ่ายสลิปใบเสร็จรับเงินหรือมิเตอร์ปั๊ม เพื่อเป็นหลักฐานตรวจสอบย้อนหลังได้ 100%
+                        </span>
+                      )}
+                    </div>
+                  </div>
+
                   <button
                     type="submit"
-                    className="w-full py-2 bg-orange-500 hover:bg-orange-600 rounded-xl text-xs font-black text-white shadow shadow-orange-500/25 transition-all flex items-center justify-center gap-1 cursor-pointer"
+                    disabled={isUploadingExecute}
+                    className="w-full py-2 bg-orange-500 hover:bg-orange-600 rounded-xl text-xs font-black text-white shadow shadow-orange-500/25 transition-all flex items-center justify-center gap-1 cursor-pointer disabled:opacity-75"
                   >
-                    <Fuel className="w-3.5 h-3.5" />
-                    บันทึกเติมจริง (สร้างรายจ่ายรถขุด)
+                    {isUploadingExecute ? (
+                      <>
+                        <div className="animate-spin rounded-full h-3 h-3 border-2 border-white border-t-transparent"></div>
+                        กำลังประมวลผลอัปโหลดเข้าคลัง Drive...
+                      </>
+                    ) : (
+                      <>
+                        <Fuel className="w-3.5 h-3.5" />
+                        บันทึกเติมจริง (สร้างรายจ่ายรถขุด)
+                      </>
+                    )}
                   </button>
                 </form>
               )}
 
               {/* State 3: Refueling completed detail reports receipt */}
               {selectedTicket.status === 'completed' && (
-                <div className="bg-white/60 border border-slate-900 rounded-xl p-3 text-[11px] text-slate-350 space-y-1.5 leading-normal">
-                  <p className="text-emerald-600 font-extrabold flex items-center gap-1">
-                    <CheckCircle2 className="w-4 h-4" />
-                    เติมเสร็จสมบูรณ์เรียบร้อยแล้ว
-                  </p>
-                  <p>⛽ <strong className="text-stone-500">ป้อนจริงไป:</strong> {selectedTicket.actualLiters} ลิตร</p>
-                  <p>💸 <strong className="text-stone-500">ชำระรวม:</strong> ฿{selectedTicket.actualPrice?.toLocaleString()} บาท</p>
-                  <p>🏢 <strong className="text-stone-500">ที่ปั๊ม:</strong> {selectedTicket.gasStationName}</p>
-                  <p>📍 <strong className="text-stone-500">พิกัดเติม:</strong> {selectedTicket.gpsLocFilled || '18.7904, 98.9841'}</p>
-                  <p>👤 <strong className="text-stone-500">ผู้คุมเติม:</strong> {selectedTicket.operatorName}</p>
+                <div className="space-y-3 pt-2">
+                  <div className="bg-white/60 border border-slate-900 rounded-xl p-3 text-[11px] text-slate-350 space-y-1.5 leading-normal">
+                    <p className="text-emerald-600 font-extrabold flex items-center gap-1">
+                      <CheckCircle2 className="w-4 h-4" />
+                      เติมเสร็จสมบูรณ์เรียบร้อยแล้ว
+                    </p>
+                    <p>⛽ <strong className="text-stone-500">ป้อนจริงไป:</strong> {selectedTicket.actualLiters} ลิตร</p>
+                    <p>💸 <strong className="text-stone-500">ชำระรวม:</strong> ฿{selectedTicket.actualPrice?.toLocaleString()} บาท</p>
+                    <p>🏢 <strong className="text-stone-500">ที่ปั๊ม:</strong> {selectedTicket.gasStationName}</p>
+                    <p>📍 <strong className="text-stone-500">พิกัดเติม:</strong> {selectedTicket.gpsLocFilled || '18.7904, 98.9841'}</p>
+                    <p>👤 <strong className="text-stone-500">ผู้คุมเติม:</strong> {selectedTicket.operatorName}</p>
+                  </div>
+
+                  {/* Google Drive Previews */}
+                  <div className="grid grid-cols-2 gap-2">
+                    {selectedTicket.mileagePhoto && (
+                      <div className="rounded-xl overflow-hidden border border-stone-200">
+                        <span className="block bg-stone-100 text-[8px] font-bold text-stone-600 px-2 py-0.5 border-b border-stone-200 text-center truncate">📷 ภาพไมล์เบิก</span>
+                        <img 
+                          src={selectedTicket.mileagePhoto} 
+                          alt="Mileage Meter" 
+                          className="w-full h-16 object-cover cursor-pointer hover:scale-105 transition-all" 
+                          onClick={() => window.open(selectedTicket.mileagePhoto, '_blank')}
+                          referrerPolicy="no-referrer"
+                        />
+                      </div>
+                    )}
+                    {selectedTicket.receiptPhotoUrl && (
+                      <div className="rounded-xl overflow-hidden border border-stone-200">
+                        <span className="block bg-stone-100 text-[8px] font-bold text-stone-600 px-2 py-0.5 border-b border-stone-200 text-center truncate">📄 ภาพใบเสร็จ</span>
+                        <img 
+                          src={selectedTicket.receiptPhotoUrl} 
+                          alt="Receipt Voucher" 
+                          className="w-full h-16 object-cover cursor-pointer hover:scale-105 transition-all" 
+                          onClick={() => window.open(selectedTicket.receiptPhotoUrl, '_blank')}
+                          referrerPolicy="no-referrer"
+                        />
+                      </div>
+                    )}
+                  </div>
                 </div>
               )}
             </div>
