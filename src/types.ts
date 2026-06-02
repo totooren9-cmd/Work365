@@ -51,6 +51,12 @@ export interface WorkScheduleTask {
   timeline: { status: TaskStatus; timestamp: string; note: string }[];
   comments: Comment[];
   photoUrls: string[];
+  locations?: string[];
+  supervisors?: string[];
+  machineries?: string[];
+  employees?: string[];
+  assignedBy?: string;
+  workTime?: string;
 }
 
 export interface StockItem {

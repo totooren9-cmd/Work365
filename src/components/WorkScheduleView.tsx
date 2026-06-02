@@ -56,6 +56,24 @@ export default function WorkScheduleView({
   const [showAddForm, setShowAddForm] = useState(initialShowAddForm);
   const [isEditing, setIsEditing] = useState(false);
   const [selectedDayTab, setSelectedDayTab] = useState('2026-05-28'); // Default to current metadata date
+  
+  const [currentYear, setCurrentYear] = useState(2026);
+  const [currentMonth, setCurrentMonth] = useState(4); // 0-indexed: May is 4 (May 2026)
+
+  // Synchronize calendar view month with selectedDayTab
+  React.useEffect(() => {
+    if (selectedDayTab) {
+      const parts = selectedDayTab.split('-');
+      if (parts.length === 3) {
+        const year = parseInt(parts[0], 10);
+        const month = parseInt(parts[1], 10) - 1; // 0-indexed
+        if (!isNaN(year) && !isNaN(month)) {
+          setCurrentYear(year);
+          setCurrentMonth(month);
+        }
+      }
+    }
+  }, [selectedDayTab]);
 
   // Synchronize state with initialShowAddForm
   React.useEffect(() => {
@@ -77,6 +95,23 @@ export default function WorkScheduleView({
   const [formPriority, setFormPriority] = useState<TaskPriority>('medium');
   const [formDueDate, setFormDueDate] = useState('2026-05-30');
   const [formGps, setFormGps] = useState('ไซต์ก่อสร้างคลอง ชลประทานเฟส 3');
+  
+  // Lists and Inputs for Rich Scheduling Form
+  const [locationsList, setLocationsList] = useState<string[]>([]);
+  const [locInput, setLocInput] = useState('');
+  
+  const [supervisorsList, setSupervisorsList] = useState<string[]>([]);
+  const [supInput, setSupInput] = useState('');
+  
+  const [machineriesList, setMachineriesList] = useState<string[]>([]);
+  const [machInput, setMachInput] = useState('');
+  
+  const [employeesList, setEmployeesList] = useState<string[]>([]);
+  const [empInput, setEmpInput] = useState('');
+  
+  const [assignedBy, setAssignedBy] = useState('');
+  const [formTime, setFormTime] = useState('08:00');
+  const [formStatus, setFormStatus] = useState<TaskStatus>('pending');
 
   // Comment state
   const [commentText, setCommentText] = useState('');
@@ -283,23 +318,37 @@ export default function WorkScheduleView({
   // Form submit handler
   const handleCreateTask = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formTitle || !formAssign) return;
+    if (!formTitle) return;
+
+    // Use employee lists and other lists, formatting fallbacks
+    const selectedAssignedTo = employeesList.join(', ') || formAssign || 'รอกำหนดช่าง';
+    const selectedGpsLoc = locationsList.join(', ') || formGps || 'ไซต์งานหลัก';
 
     const newTask: WorkScheduleTask = {
       id: `tsk-${Math.floor(Math.random() * 900) + 100}`,
       title: formTitle,
       description: formDesc,
       machineryId: formMach || undefined,
-      assignedTo: formAssign,
+      assignedTo: selectedAssignedTo,
       priority: formPriority,
       dueDate: formDueDate,
-      gpsLocName: formGps,
-      status: 'pending',
+      gpsLocName: selectedGpsLoc,
+      status: formStatus,
       timeline: [
-        { status: 'pending', timestamp: new Date().toISOString().replace('T', ' ').slice(0, 16), note: 'สร้างใบแผนงานสำเร็จในระบบ FlowWork CMMS' }
+        { 
+          status: formStatus, 
+          timestamp: new Date().toISOString().replace('T', ' ').slice(0, 16), 
+          note: `สร้างใบแผนงานสำเร็จในระบบ FlowWork CMMS - กำหนดผู้รับผิดชอบ: ${selectedAssignedTo}` 
+        }
       ],
       comments: [],
-      photoUrls: []
+      photoUrls: [],
+      locations: locationsList.length > 0 ? locationsList : [selectedGpsLoc],
+      supervisors: supervisorsList,
+      machineries: machineriesList,
+      employees: employeesList.length > 0 ? employeesList : (formAssign ? [formAssign] : []),
+      assignedBy: assignedBy,
+      workTime: formTime
     };
 
     onAddTask(newTask);
@@ -312,6 +361,17 @@ export default function WorkScheduleView({
     setFormAssign('');
     setFormPriority('medium');
     setFormGps('ไซต์งานก่อสร้างคลอง ชลประทานเฟส 3');
+    setLocationsList([]);
+    setLocInput('');
+    setSupervisorsList([]);
+    setSupInput('');
+    setMachineriesList([]);
+    setMachInput('');
+    setEmployeesList([]);
+    setEmpInput('');
+    setAssignedBy('');
+    setFormTime('08:00');
+    setFormStatus('pending');
     handleCloseForm();
   };
 
@@ -379,36 +439,70 @@ export default function WorkScheduleView({
     });
   };
 
-  // 1. Month Calendar Matrix Configuration (May 2026)
+  // 1. Month Calendar Matrix Configuration (Dynamic)
   const calendarDays = useMemo(() => {
     const days = [];
-    for (let i = 0; i < 5; i++) { // May 2026 starts Friday
+    const firstDayIndex = new Date(currentYear, currentMonth, 1).getDay(); // 0 is Sunday
+    const totalDaysInMonth = new Date(currentYear, currentMonth + 1, 0).getDate();
+
+    // Blank cells before the start of the month
+    for (let i = 0; i < firstDayIndex; i++) {
       days.push({ blank: true, dayNum: 0 });
     }
-    for (let day = 1; day <= 31; day++) {
-      const dayStr = `2026-05-${day < 10 ? '0' + day : day}`;
+
+    // Days in Month
+    for (let day = 1; day <= totalDaysInMonth; day++) {
+      const monthPart = String(currentMonth + 1).padStart(2, '0');
+      const dayPart = String(day).padStart(2, '0');
+      const dayStr = `${currentYear}-${monthPart}-${dayPart}`;
       const dayTasks = tasks.filter(t => t.dueDate === dayStr);
       days.push({ blank: false, dayNum: day, dateStr: dayStr, dayTasks });
     }
     return days;
-  }, [tasks]);
+  }, [tasks, currentYear, currentMonth]);
 
-  // 2. Week Calendar configuration (May 25, 2026 - May 31, 2026)
+  // 2. Week Calendar configuration (Dynamic 7-day week based on selectedDayTab)
   const weekDays = useMemo(() => {
-    const list = [
-      { name: 'จันทร์ (Mon)', dateStr: '2026-05-25' },
-      { name: 'อังคาร (Tue)', dateStr: '2026-05-26' },
-      { name: 'พุธ (Wed)', dateStr: '2026-05-27' },
-      { name: 'พฤหัสฯ (Thu)', dateStr: '2026-05-28' }, // Current day in metadata context
-      { name: 'ศุกร์ (Fri)', dateStr: '2026-05-29' },
-      { name: 'เสาร์ (Sat)', dateStr: '2026-05-30' },
-      { name: 'อาทิตย์ (Sun)', dateStr: '2026-05-31' },
+    const parts = selectedDayTab.split('-');
+    const year = parseInt(parts[0], 10);
+    const month = parseInt(parts[1], 10) - 1;
+    const day = parseInt(parts[2], 10);
+    
+    const d = new Date(year, month, day);
+    const dayOfWeek = d.getDay(); // 0 is Sun, 1 is Mon, ..., 6 is Sat
+    const distanceToMonday = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
+    
+    const monday = new Date(year, month, day + distanceToMonday);
+    
+    const thaiDayNames = [
+      'จันทร์ (Mon)',
+      'อังคาร (Tue)',
+      'พุธ (Wed)',
+      'พฤหัสฯ (Thu)',
+      'ศุกร์ (Fri)',
+      'เสาร์ (Sat)',
+      'อาทิตย์ (Sun)'
     ];
+    
+    const list = [];
+    for (let i = 0; i < 7; i++) {
+      const currentDay = new Date(monday.getFullYear(), monday.getMonth(), monday.getDate() + i);
+      const yStr = currentDay.getFullYear();
+      const mStr = String(currentDay.getMonth() + 1).padStart(2, '0');
+      const dStr = String(currentDay.getDate()).padStart(2, '0');
+      const dateStr = `${yStr}-${mStr}-${dStr}`;
+      
+      list.push({
+        name: thaiDayNames[i],
+        dateStr
+      });
+    }
+    
     return list.map(d => {
       const dayTasks = tasks.filter(t => t.dueDate === d.dateStr);
       return { ...d, dayTasks };
     });
-  }, [tasks]);
+  }, [tasks, selectedDayTab]);
 
   // 3. Day Calendar Configuration (Dynamic hours timeline for selectedDayTab)
   const dayScheduleTasks = useMemo(() => {
@@ -524,26 +618,26 @@ export default function WorkScheduleView({
             <div className="mt-5">
               {showAddForm ? (
                 /* Dynamic Work Assignment form */
-                <form onSubmit={handleCreateTask} className={style.formBg}>
-                  <div className="flex items-center justify-between border-b pb-2 mb-3 border-slate-500/10">
-                    <h3 className="text-sm font-black text-orange-500 flex items-center gap-1.5">
+                <form onSubmit={handleCreateTask} className={`${style.formBg} transition-all duration-300`}>
+                  <div className="flex items-center justify-between border-b pb-2.5 mb-4 border-slate-500/10">
+                    <h3 className="text-sm font-black text-orange-500 flex items-center gap-1.5 uppercase tracking-wide">
                       <Sparkles className="w-4 h-4" /> มอบหมายแผนงานใหม่
                     </h3>
                     <button 
                       type="button" 
                       onClick={handleCloseForm}
-                      className="p-1 hover:bg-slate-500/10 rounded"
+                      className="p-1 hover:bg-slate-500/10 rounded transition-colors duration-200 cursor-pointer"
                     >
-                      <X className="w-4 h-4 text-stone-500" />
+                      <X className="w-4 h-4 text-stone-550" />
                     </button>
                   </div>
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
-                      <label className={`block text-[11px] ${style.label} mb-1`}>ชื่องานปฏิบัติการ (Task Title)</label>
+                      <label className={`block text-[10px] ${style.label} mb-1 uppercase tracking-wider`}>ชื่องานปฏิบัติการ (Task Title)</label>
                       <input
                         type="text"
-                        className={`w-full rounded-xl px-4 py-2 text-xs outline-none ${style.inputText}`}
+                        className={`w-full rounded-xl px-4 py-2.5 text-xs outline-none ${style.inputText}`}
                         value={formTitle}
                         onChange={(e) => setFormTitle(e.target.value)}
                         placeholder="เช่น ช่างซ่อมบำรุงเปลี่ยนซีลแทร็กรถแม็คโคร"
@@ -551,60 +645,271 @@ export default function WorkScheduleView({
                       />
                     </div>
                     <div>
-                      <label className={`block text-[11px] ${style.label} mb-1`}>ผู้ทำงาน / ช่างที่ได้รับมอบหมาย</label>
+                      <label className={`block text-[10px] ${style.label} mb-1 uppercase tracking-wider`}>ผู้มอบหมายงานหลัก</label>
                       <input
                         type="text"
-                        className={`w-full rounded-xl px-4 py-2 text-xs outline-none ${style.inputText}`}
-                        value={formAssign}
-                        onChange={(e) => setFormAssign(e.target.value)}
-                        placeholder="เช่น ช่างศักดิ์ชาย เรืองเดช"
-                        required
+                        className={`w-full rounded-xl px-4 py-2.5 text-xs outline-none ${style.inputText}`}
+                        value={assignedBy}
+                        onChange={(e) => setAssignedBy(e.target.value)}
+                        placeholder="ชื่อผู้รับผิดชอบหลัก"
                       />
                     </div>
                   </div>
 
-                  <div className="mt-3">
-                    <label className={`block text-[11px] ${style.label} mb-1`}>คำแนะนำและอสังหาริมทรัพย์ / รายละเอียดงานเพิ่มเติม</label>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-3.5">
+                    {/* Locations */}
+                    <div>
+                      <label className={`block text-[10px] ${style.label} mb-1 uppercase tracking-wider text-rose-600 flex justify-between`}>
+                        <span>📍 สถานที่หน้างาน (Locations) ({locationsList.length})</span>
+                      </label>
+                      <div className="flex gap-1.5">
+                        <input
+                          type="text"
+                          className={`flex-1 rounded-xl px-3 py-2 text-xs outline-none ${style.inputText}`}
+                          value={locInput}
+                          onChange={(e) => setLocInput(e.target.value)}
+                          placeholder="เช่น PTNC บางเลน นครปฐม"
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') {
+                              e.preventDefault();
+                              if (locInput.trim()) {
+                                setLocationsList([...locationsList, locInput.trim()]);
+                                setLocInput('');
+                              }
+                            }
+                          }}
+                        />
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (locInput.trim()) {
+                              setLocationsList([...locationsList, locInput.trim()]);
+                              setLocInput('');
+                            }
+                          }}
+                          className="px-3 bg-orange-500 hover:bg-orange-600 active:scale-95 text-white text-xs font-bold rounded-xl transition-all"
+                        >
+                          +
+                        </button>
+                      </div>
+                      {locationsList.length > 0 && (
+                        <div className="flex flex-wrap gap-1 mt-1.5 p-1.5 bg-stone-500/5 rounded-xl border border-stone-200/50">
+                          {locationsList.map((loc, idx) => (
+                            <span key={idx} className="inline-flex items-center gap-1 bg-white border border-stone-200 rounded-lg px-2 py-0.5 text-[9.5px] font-medium text-stone-700">
+                              <span>{loc}</span>
+                              <button
+                                type="button"
+                                onClick={() => setLocationsList(locationsList.filter((_, i) => i !== idx))}
+                                className="text-stone-400 hover:text-stone-600 font-bold ml-0.5"
+                              >
+                                &times;
+                              </button>
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Vehicles / Machinery */}
+                    <div>
+                      <label className={`block text-[10px] ${style.label} mb-1 uppercase tracking-wider text-emerald-600 flex justify-between`}>
+                        <span>🚜 เพิ่มรถและเครื่องจักร ({machineriesList.length})</span>
+                      </label>
+                      <div className="flex gap-1.5">
+                        <input
+                          type="text"
+                          className={`flex-1 rounded-xl px-3 py-2 text-xs outline-none ${style.inputText}`}
+                          value={machInput}
+                          onChange={(e) => setMachInput(e.target.value)}
+                          placeholder="เช่น แบคโฮ เบอร์ 5 5 (320) เครื่องจักร สามารถเพิ่มได้มากกว่า 2 รายการ"
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') {
+                              e.preventDefault();
+                              if (machInput.trim()) {
+                                setMachineriesList([...machineriesList, machInput.trim()]);
+                                setMachInput('');
+                              }
+                            }
+                          }}
+                        />
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (machInput.trim()) {
+                              setMachineriesList([...machineriesList, machInput.trim()]);
+                              setMachInput('');
+                            }
+                          }}
+                          className="px-3 bg-orange-500 hover:bg-orange-600 active:scale-95 text-white text-xs font-bold rounded-xl transition-all"
+                        >
+                          +
+                        </button>
+                      </div>
+                      {machineriesList.length > 0 && (
+                        <div className="flex flex-wrap gap-1 mt-1.5 p-1.5 bg-stone-500/5 rounded-xl border border-stone-200/50">
+                          {machineriesList.map((machItem, idx) => (
+                            <span key={idx} className="inline-flex items-center gap-1 bg-white border border-stone-200 rounded-lg px-2 py-0.5 text-[9.5px] font-medium text-stone-700">
+                              <span>{machItem}</span>
+                              <button
+                                type="button"
+                                onClick={() => setMachineriesList(machineriesList.filter((_, i) => i !== idx))}
+                                className="text-stone-400 hover:text-stone-600 font-bold ml-0.5"
+                              >
+                                &times;
+                              </button>
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-3">
+                    {/* Team supervisors */}
+                    <div>
+                      <label className={`block text-[10px] ${style.label} mb-1 uppercase tracking-wider text-amber-600`}>🧔 เพิ่มหัวหน้างาน ({supervisorsList.length})</label>
+                      <div className="flex gap-1.5">
+                        <input
+                          type="text"
+                          className={`flex-1 rounded-xl px-3 py-2 text-xs outline-none ${style.inputText}`}
+                          value={supInput}
+                          onChange={(e) => setSupInput(e.target.value)}
+                          placeholder="เช่น พี่ต้น"
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') {
+                              e.preventDefault();
+                              if (supInput.trim()) {
+                                setSupervisorsList([...supervisorsList, supInput.trim()]);
+                                setSupInput('');
+                              }
+                            }
+                          }}
+                        />
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (supInput.trim()) {
+                              setSupervisorsList([...supervisorsList, supInput.trim()]);
+                              setSupInput('');
+                            }
+                          }}
+                          className="px-3 bg-orange-500 hover:bg-orange-600 active:scale-95 text-white text-xs font-bold rounded-xl transition-all"
+                        >
+                          +
+                        </button>
+                      </div>
+                      {supervisorsList.length > 0 && (
+                        <div className="flex flex-wrap gap-1 mt-1.5 p-1.5 bg-stone-500/5 rounded-xl border border-stone-200/50">
+                          {supervisorsList.map((sup, idx) => (
+                            <span key={idx} className="inline-flex items-center gap-1 bg-white border border-stone-200 rounded-lg px-2 py-0.5 text-[9.5px] font-medium text-stone-700">
+                              <span>{sup}</span>
+                              <button
+                                type="button"
+                                onClick={() => setSupervisorsList(supervisorsList.filter((_, i) => i !== idx))}
+                                className="text-stone-400 hover:text-stone-600 font-bold ml-0.5"
+                              >
+                                &times;
+                              </button>
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Field Workers */}
+                    <div>
+                      <label className={`block text-[10px] ${style.label} mb-1 uppercase tracking-wider text-indigo-600`}>👷 เพิ่มพนักงาน ได้มากกว่า 2 รายการ ({employeesList.length})</label>
+                      <div className="flex gap-1.5">
+                        <input
+                          type="text"
+                          className={`flex-1 rounded-xl px-3 py-2 text-xs outline-none ${style.inputText}`}
+                          value={empInput}
+                          onChange={(e) => setEmpInput(e.target.value)}
+                          placeholder="เช่น พี่เบนซ์ พี่เทพ"
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') {
+                              e.preventDefault();
+                              if (empInput.trim()) {
+                                setEmployeesList([...employeesList, empInput.trim()]);
+                                setEmpInput('');
+                              }
+                            }
+                          }}
+                        />
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (empInput.trim()) {
+                              setEmployeesList([...employeesList, empInput.trim()]);
+                              setEmpInput('');
+                            }
+                          }}
+                          className="px-3 bg-orange-500 hover:bg-orange-600 active:scale-95 text-white text-xs font-bold rounded-xl transition-all"
+                        >
+                          +
+                        </button>
+                      </div>
+                      {employeesList.length > 0 && (
+                        <div className="flex flex-wrap gap-1 mt-1.5 p-1.5 bg-stone-500/5 rounded-xl border border-stone-200/50">
+                          {employeesList.map((emp, idx) => (
+                            <span key={idx} className="inline-flex items-center gap-1 bg-white border border-stone-200 rounded-lg px-2 py-0.5 text-[9.5px] font-medium text-stone-700">
+                              <span>{emp}</span>
+                              <button
+                                type="button"
+                                onClick={() => setEmployeesList(employeesList.filter((_, i) => i !== idx))}
+                                className="text-stone-400 hover:text-stone-600 font-bold ml-0.5"
+                              >
+                                &times;
+                              </button>
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="mt-3.5">
+                    <label className={`block text-[10px] ${style.label} mb-1 uppercase tracking-wider`}>คำแนะนำและอสังหาริมทรัพย์ / รายละเอียดงานเพิ่มเติม</label>
                     <textarea
-                      rows={2}
+                      rows={2.5}
                       className={`w-full rounded-xl px-4 py-2 text-xs outline-none ${style.inputText}`}
                       value={formDesc}
                       onChange={(e) => setFormDesc(e.target.value)}
-                      placeholder="อธิบายพิกัดจุดขุด แผนกที่รอประสานงาน ตารางวันหยุดและอื่น ๆ..."
+                      placeholder="อธิบายรายละเอียด พิกัดจุดขุด และอื่น ๆ..."
                     />
                   </div>
 
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mt-3">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 mt-3.5">
                     <div>
-                      <label className={`block text-[11px] ${style.label} mb-1`}>พ่วงเครื่องจักรประจำไซต์</label>
-                      <select
-                        className={`w-full rounded-xl px-3 py-2 text-xs outline-none ${style.inputText}`}
-                        value={formMach}
-                        onChange={(e) => setFormMach(e.target.value)}
-                      >
-                        <option value="">-- ไม่ต้องการพ่วงเครื่องจักร --</option>
-                        {machinery.map(m => (
-                          <option key={m.id} value={m.id}>{m.code} - {m.brand} {m.model}</option>
-                        ))}
-                      </select>
-                    </div>
-
-                    <div>
-                      <label className={`block text-[11px] ${style.label} mb-1`}>ความเร่งด่วน (Priority)</label>
+                      <label className={`block text-[10.5px] ${style.label} mb-1`}>ความเร่งด่วน</label>
                       <select
                         className={`w-full rounded-xl px-3 py-2 text-xs outline-none ${style.inputText}`}
                         value={formPriority}
                         onChange={(e) => setFormPriority(e.target.value as TaskPriority)}
                       >
-                        <option value="low">🟢 ทั่วไป (Low Priority)</option>
-                        <option value="medium">🟡 สำคัญ (Medium Priority)</option>
+                        <option value="low">🟡 ทั่วไป (Low Priority)</option>
+                        <option value="medium">🟠 สำคัญ (Medium Priority)</option>
                         <option value="high">🔴 เร่งด่วน (High Priority)</option>
-                        <option value="critical">🚨 วิกฤตหยุดเครื่อง (Critical Priority)</option>
+                        <option value="critical">🚨 วิกฤตหยุดเครื่อง (Critical)</option>
                       </select>
                     </div>
 
                     <div>
-                      <label className={`block text-[11px] ${style.label} mb-1`}>กำหนดส่งงาน (Due Date)</label>
+                      <label className={`block text-[10.5px] ${style.label} mb-1`}>สถานะเริ่มต้น</label>
+                      <select
+                        className={`w-full rounded-xl px-3 py-2 text-xs outline-none ${style.inputText}`}
+                        value={formStatus}
+                        onChange={(e) => setFormStatus(e.target.value as TaskStatus)}
+                      >
+                        <option value="pending">⏳ รอดำเนินการ</option>
+                        <option value="in_progress">⚙️ กำลังดำเนินการ</option>
+                        <option value="awaiting_approval">🔔 รออนุมัติเสร็จงาน</option>
+                        <option value="completed">✅ เสร็จสิ้นการปฏิบัติงาน</option>
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className={`block text-[10.5px] ${style.label} mb-2`}>วันที่ทำงาน</label>
                       <input
                         type="date"
                         className={`w-full rounded-xl px-3 py-2 text-xs outline-none ${style.inputText}`}
@@ -612,30 +917,29 @@ export default function WorkScheduleView({
                         onChange={(e) => setFormDueDate(e.target.value)}
                       />
                     </div>
+
+                    <div>
+                      <label className={`block text-[10.5px] ${style.label} mb-2`}>เวลา</label>
+                      <input
+                        type="time"
+                        className={`w-full rounded-xl px-3 py-2 text-xs outline-none ${style.inputText}`}
+                        value={formTime}
+                        onChange={(e) => setFormTime(e.target.value)}
+                      />
+                    </div>
                   </div>
 
-                  <div className="mt-3">
-                    <label className={`block text-[11px] ${style.label} mb-1`}>GPS หน้างาน และ แคมป์ชลประทาน</label>
-                    <input
-                      type="text"
-                      className={`w-full rounded-xl px-4 py-2 text-xs outline-none ${style.inputText}`}
-                      value={formGps}
-                      onChange={(e) => setFormGps(e.target.value)}
-                      placeholder="เช่น ไซต์งานคลองชลประทานสารภี พิกัด 18.784, 98.995"
-                    />
-                  </div>
-
-                  <div className="flex justify-end gap-2 pt-4 border-t border-slate-500/10 mt-4">
+                  <div className="flex justify-end gap-2.5 pt-4 border-t border-slate-500/10 mt-4.5">
                     <button
                       type="button"
                       onClick={handleCloseForm}
-                      className={style.btnSecondary}
+                      className={`${style.btnSecondary} cursor-pointer px-4 py-1.5 rounded-xl text-xs`}
                     >
                       ยกเลิก
                     </button>
                     <button
                       type="submit"
-                      className={`${style.btnPrimary} px-6 rounded-xl text-xs`}
+                      className={`${style.btnPrimary} cursor-pointer px-6 py-2 rounded-xl text-xs shadow-md`}
                     >
                       บันทึกคำสั่งงาน
                     </button>
@@ -646,9 +950,55 @@ export default function WorkScheduleView({
                 // 3.1: Month View Engine
                 calendarView === 'month' ? (
                   <div className="space-y-3">
-                    <div className="bg-stone-50/60 p-3.5 rounded-t-xl flex justify-between items-center text-xs font-bold text-stone-700 border border-slate-500/10">
-                      <span>🗓️ แผนงานรายเดือน (พฤษภาคม 2026 / May 2026)</span>
-                      <span className="text-[10px] text-orange-600 bg-orange-500/10 px-2 py-0.5 rounded-full font-black">
+                    <div className="bg-stone-50/60 p-3.5 rounded-t-xl flex flex-col sm:flex-row gap-3 justify-between items-center text-xs font-bold text-stone-700 border border-slate-500/10">
+                      <div className="flex items-center gap-1.5">
+                        <button 
+                          type="button"
+                          onClick={() => {
+                            if (currentMonth === 0) {
+                              setCurrentMonth(11);
+                              setCurrentYear(prev => prev - 1);
+                              const prevMonthDay = String(new Date(currentYear - 1, 11, 28).getDate()).padStart(2, '0');
+                              setSelectedDayTab(`${currentYear - 1}-12-${prevMonthDay}`);
+                            } else {
+                              setCurrentMonth(prev => prev - 1);
+                              const prevMonthDay = String(new Date(currentYear, currentMonth - 1, 28).getDate()).padStart(2, '0');
+                              setSelectedDayTab(`${currentYear}-${String(currentMonth).padStart(2, '0')}-${prevMonthDay}`);
+                            }
+                          }}
+                          className="px-2.5 py-1 text-[10px] bg-white border border-stone-200 rounded-lg hover:bg-stone-50 select-none shadow-sm cursor-pointer"
+                        >
+                          ◀ ย้อนหลัง
+                        </button>
+                        <span className="text-stone-850 font-black px-1.5 text-xs sm:text-sm">
+                          🗓️ {[
+                            'มกราคม', 'กุมภาพันธ์', 'มีนาคม', 'เมษายน', 'พฤษภาคม', 'มิถุนายน',
+                            'กรกฎาคม', 'สิงหาคม', 'กันยายน', 'ตุลาคม', 'พฤศจิกายน', 'ธันวาคม'
+                          ][currentMonth]} {currentYear + 543} / {[
+                            'January', 'February', 'March', 'April', 'May', 'June',
+                            'July', 'August', 'September', 'October', 'November', 'December'
+                          ][currentMonth]} {currentYear}
+                        </span>
+                        <button 
+                          type="button"
+                          onClick={() => {
+                            if (currentMonth === 11) {
+                              setCurrentMonth(0);
+                              setCurrentYear(prev => prev + 1);
+                              const nextMonthDay = String(new Date(currentYear + 1, 0, 28).getDate()).padStart(2, '0');
+                              setSelectedDayTab(`${currentYear + 1}-01-${nextMonthDay}`);
+                            } else {
+                              setCurrentMonth(prev => prev + 1);
+                              const nextMonthDay = String(new Date(currentYear, currentMonth + 1, 28).getDate()).padStart(2, '0');
+                              setSelectedDayTab(`${currentYear}-${String(currentMonth + 2).padStart(2, '0')}-${nextMonthDay}`);
+                            }
+                          }}
+                          className="px-2.5 py-1 text-[10px] bg-white border border-stone-200 rounded-lg hover:bg-stone-50 select-none shadow-sm cursor-pointer"
+                        >
+                          ถัดไป ▶
+                        </button>
+                      </div>
+                      <span className="text-[10px] text-orange-600 bg-orange-500/10 px-3 py-1 rounded-full font-black">
                         ชลประทานเฟรส 3 เขตเหนือ
                       </span>
                     </div>
@@ -672,26 +1022,34 @@ export default function WorkScheduleView({
 
                         const hasTasks = val.dayTasks && val.dayTasks.length > 0;
                         const hasActive = val.dayTasks?.some(t => t.id === activeTaskId);
+                        const isCurrentActiveDay = val.dateStr === selectedDayTab;
 
                         return (
                           <div 
                             key={val.dayNum} 
                             onClick={() => {
+                              if (val.dateStr) {
+                                setSelectedDayTab(val.dateStr);
+                              }
                               if (hasTasks && val.dayTasks) {
                                 setActiveTaskId(val.dayTasks[0].id);
                                 setIsEditing(false);
                               } else {
                                 // Default task template
-                                setFormDueDate(val.dateStr || '2026-05-30');
+                                if (val.dateStr) {
+                                  setFormDueDate(val.dateStr);
+                                }
                                 setShowAddForm(true);
                               }
                             }}
                             className={`min-h-12 p-2 rounded-xl flex flex-col justify-between border cursor-pointer hover:scale-105 active:scale-95 transition-all text-left ${
-                              hasActive 
-                                ? 'bg-orange-500/15 border-orange-500/70 text-orange-600' 
-                                : hasTasks 
-                                  ? `${style.card} border-sky-400/50 hover:border-sky-500` 
-                                  : 'bg-stone-50/80 border border-stone-200/60 hover:bg-white'
+                              isCurrentActiveDay
+                                ? 'bg-orange-500/20 border-orange-600 font-extrabold text-orange-700 shadow-sm'
+                                : hasActive 
+                                  ? 'bg-orange-500/15 border-orange-500/70 text-orange-600' 
+                                  : hasTasks 
+                                    ? `${style.card} border-sky-400/50 hover:border-sky-500` 
+                                    : 'bg-stone-50/80 border border-stone-200/60 hover:bg-white'
                             }`}
                           >
                             <span className={`text-[10px] font-mono leading-none font-bold ${hasTasks ? 'text-orange-500 font-extrabold' : 'text-slate-500'}`}>
@@ -721,16 +1079,50 @@ export default function WorkScheduleView({
                   
                   // 3.2: Weekly Calendar Grid (7 Columns Mon-Sun)
                   <div className="space-y-3">
-                    <div className="bg-stone-50/60 p-3 rounded-t-xl text-center text-xs font-bold text-stone-700 border border-slate-500/10">
-                      📅 แผนงานจำลองรายสัปดาห์ (สัปดาห์ที่ 4: 25 - 31 พฤษภาคม 2026)
+                    <div className="bg-stone-50/60 p-3 rounded-t-xl flex flex-col sm:flex-row gap-2 items-center justify-between text-xs font-bold text-stone-700 border border-slate-500/10">
+                      <div>
+                        📅 แผนงานจำลองรายสัปดาห์ ({new Date(weekDays[0].dateStr).toLocaleDateString('th-TH', { day: 'numeric', month: 'short' })} - {new Date(weekDays[6].dateStr).toLocaleDateString('th-TH', { day: 'numeric', month: 'short', year: 'numeric' })})
+                      </div>
+                      <div className="flex gap-1.5">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const [y, m, d] = selectedDayTab.split('-').map(Number);
+                            const prevWeek = new Date(y, m - 1, d - 7);
+                            const yStr = prevWeek.getFullYear();
+                            const mStr = String(prevWeek.getMonth() + 1).padStart(2, '0');
+                            const dStr = String(prevWeek.getDate()).padStart(2, '0');
+                            setSelectedDayTab(`${yStr}-${mStr}-${dStr}`);
+                          }}
+                          className="px-2.5 py-1 text-[10px] bg-white border border-stone-200 rounded-lg hover:bg-stone-50 select-none shadow-sm cursor-pointer"
+                        >
+                          ◀ สัปดาห์ก่อนหน้า
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const [y, m, d] = selectedDayTab.split('-').map(Number);
+                            const nextWeek = new Date(y, m - 1, d + 7);
+                            const yStr = nextWeek.getFullYear();
+                            const mStr = String(nextWeek.getMonth() + 1).padStart(2, '0');
+                            const dStr = String(nextWeek.getDate()).padStart(2, '0');
+                            setSelectedDayTab(`${yStr}-${mStr}-${dStr}`);
+                          }}
+                          className="px-2.5 py-1 text-[10px] bg-white border border-stone-200 rounded-lg hover:bg-stone-50 select-none shadow-sm cursor-pointer"
+                        >
+                          สัปดาห์ถัดไป ▶
+                        </button>
+                      </div>
                     </div>
                     
                     <div className="grid grid-cols-1 md:grid-cols-7 gap-3 h-80 overflow-y-auto pr-1">
                       {weekDays.map(day => (
-                        <div key={day.dateStr} className={`p-2 rounded-xl h-full flex flex-col ${style.innerBg}`}>
+                        <div key={day.dateStr} className={`p-2 rounded-xl h-full flex flex-col ${day.dateStr === selectedDayTab ? 'ring-2 ring-orange-500/50 bg-orange-500/5 border-orange-500/20 shadow-md' : style.innerBg}`}>
                           <div className="text-center border-b border-slate-500/15 pb-1.5 mb-2">
                             <h4 className="text-[10px] font-black uppercase text-orange-500 shrink-0">{day.name}</h4>
-                            <span className="text-[9px] font-mono font-extrabold text-slate-500">{day.dateStr.substring(8, 10)} พ.ค.</span>
+                            <span className="text-[9px] font-mono font-extrabold text-slate-500">
+                              {new Date(day.dateStr).toLocaleDateString('th-TH', { day: 'numeric', month: 'short' })}
+                            </span>
                           </div>
 
                           <div className="space-y-1.5 flex-1 overflow-y-auto max-h-60">
@@ -740,13 +1132,14 @@ export default function WorkScheduleView({
                                   key={t.id}
                                   onClick={(e) => {
                                     e.stopPropagation();
+                                    setSelectedDayTab(day.dateStr);
                                     setActiveTaskId(t.id);
                                     setIsEditing(false);
                                   }}
                                   className={`p-2 rounded-lg border text-left cursor-pointer transition-all hover:scale-105 active:scale-95 ${
                                     t.id === activeTaskId 
-                                      ? 'bg-orange-500 text-white border-orange-500/80 shadow' 
-                                      : 'bg-white border-slate-200'
+                                      ? 'bg-orange-600 text-white border-orange-500/80 shadow' 
+                                      : 'bg-white border-slate-200 text-stone-800'
                                   }`}
                                 >
                                   <p className="text-[9px] font-bold line-clamp-2 leading-tight">{t.title}</p>
@@ -773,13 +1166,17 @@ export default function WorkScheduleView({
                       
                       {/* Tabs choosing active date */}
                       <div className="flex gap-1 overflow-x-auto">
-                        {['2026-05-25', '2026-05-26', '2026-05-27', '2026-05-28', '2026-05-29', '2026-05-30', '2026-05-31'].map(dtStr => (
+                        {weekDays.map(day => (
                           <button
-                            key={dtStr}
-                            onClick={() => setSelectedDayTab(dtStr)}
-                            className={`px-2.5 py-1 rounded-lg text-[9px] font-mono font-bold ${selectedDayTab === dtStr ? 'bg-orange-500 text-white' : 'bg-white text-stone-700'}`}
+                            key={day.dateStr}
+                            onClick={() => setSelectedDayTab(day.dateStr)}
+                            className={`px-2.5 py-1 rounded-lg text-[9px] font-mono font-bold shrink-0 transition-colors ${
+                              selectedDayTab === day.dateStr 
+                                ? 'bg-orange-500 text-white' 
+                                : 'bg-white text-stone-700 hover:bg-stone-50 border border-stone-200'
+                            }`}
                           >
-                            {dtStr.substring(8, 10)} พ.ค.
+                            {new Date(day.dateStr).toLocaleDateString('th-TH', { day: 'numeric', month: 'short' })}
                           </button>
                         ))}
                       </div>

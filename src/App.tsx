@@ -19,11 +19,16 @@ import {
   Sparkles,
   LayoutDashboard,
   Clock,
-  Briefcase
+  Briefcase,
+  FileCheck,
+  Download,
+  BarChart3
 } from 'lucide-react';
 
 // Import Views
 import DashboardView from './components/DashboardView';
+import JobSubmissionView from './components/JobSubmissionView';
+import { exportToExcel } from './utils/excelExport';
 import { sendLineTaskNotification, sendLineRepairNotification, sendLineAttendanceNotification, sendLineExpenseNotification } from './utils/lineNotify';
 import WorkScheduleView from './components/WorkScheduleView';
 import RepairView from './components/RepairView';
@@ -35,6 +40,7 @@ import AttendanceView from './components/AttendanceView';
 import LineFlexBuilder from './components/LineFlexBuilder';
 import DatabaseSchemaView from './components/DatabaseSchemaView';
 import QrScannerModal from './components/QrScannerModal';
+import ReportsCenterView from './components/ReportsCenterView';
 
 // Import Initial Data and Types
 import { 
@@ -42,7 +48,6 @@ import {
   INITIAL_TASKS, 
   INITIAL_STOCK, 
   INITIAL_ISSUANCES, 
-  INITIAL_ATTENDANCE_LOGS, 
   INITIAL_REPAIRS, 
   INITIAL_REFUELS, 
   INITIAL_EXPENSES 
@@ -106,10 +111,7 @@ const APPS_INITIAL_ISSUANCES = INITIAL_ISSUANCES.map(i => ({
   itemId: toUUID(i.itemId)
 }));
 
-const APPS_INITIAL_ATTENDANCE_LOGS = INITIAL_ATTENDANCE_LOGS.map(a => ({
-  ...a,
-  id: toUUID(a.id)
-}));
+// APPS_INITIAL_ATTENDANCE_LOGS is disabled to avoid loading local mock attendance lists
 
 const APPS_INITIAL_REPAIRS = INITIAL_REPAIRS.map(r => ({
   ...r,
@@ -226,7 +228,7 @@ export default function App() {
   const [tasks, setTasks] = useState<WorkScheduleTask[]>(APPS_INITIAL_TASKS);
   const [stocks, setStocks] = useState<StockItem[]>(APPS_INITIAL_STOCK);
   const [issuances, setIssuances] = useState<InventoryIssuance[]>(APPS_INITIAL_ISSUANCES);
-  const [attendances, setAttendances] = useState<AttendanceLog[]>(APPS_INITIAL_ATTENDANCE_LOGS);
+  const [attendances, setAttendances] = useState<AttendanceLog[]>([]);
   const [repairs, setRepairs] = useState<RepairRequest[]>(APPS_INITIAL_REPAIRS);
   const [refuels, setRefuels] = useState<RefuelStatus[]>(APPS_INITIAL_REFUELS);
   const [expenses, setExpenses] = useState<ExpenseRecord[]>(APPS_INITIAL_EXPENSES);
@@ -271,7 +273,7 @@ export default function App() {
         setMachinery(loadedMach || INITIAL_MACHINERY);
         setTasks(loadedTasks || INITIAL_TASKS);
         setStocks(loadedStocks || INITIAL_STOCK);
-        setAttendances(loadedAttendances || INITIAL_ATTENDANCE_LOGS);
+        setAttendances(loadedAttendances || []);
         setRepairs(loadedRepairs || INITIAL_REPAIRS);
         setExpenses(loadedExpenses || INITIAL_EXPENSES);
 
@@ -570,16 +572,164 @@ export default function App() {
     });
   };
 
+  const handleExportActiveTab = () => {
+    switch (activeTab) {
+      case 'dashboard':
+        exportToExcel(
+          tasks,
+          [
+            { key: 'id', label: 'รหัสงาน (ID)' },
+            { key: 'title', label: 'ชื่องานปฏิบัติการ' },
+            { key: 'assignedTo', label: 'ผู้ปฏิบัติงาน' },
+            { key: 'priority', label: 'ความเร่งด่วน' },
+            { key: 'dueDate', label: 'กำหนดส่งงาน' },
+            { key: 'status', label: 'สถานะงาน' },
+            { key: 'gpsLocName', label: 'GPS / สถานที่' }
+          ],
+          'dashboard_tasks'
+        );
+        break;
+      case 'schedule':
+        exportToExcel(
+          tasks,
+          [
+            { key: 'id', label: 'รหัสงาน (ID)' },
+            { key: 'title', label: 'ชื่องานปฏิบัติการ' },
+            { key: 'assignedTo', label: 'ผู้ปฏิบัติงาน' },
+            { key: 'priority', label: 'ความเร่งด่วน' },
+            { key: 'dueDate', label: 'กำหนดส่งงาน' },
+            { key: 'workTime', label: 'เวลาปฏิบัติงาน' },
+            { key: 'assignedBy', label: 'ผู้มอบหมาย' },
+            { key: 'status', label: 'สถานะงาน' },
+            { key: 'gpsLocName', label: 'GPS / สถานที่' }
+          ],
+          'schedule_tasks'
+        );
+        break;
+      case 'repairs':
+        exportToExcel(
+          repairs,
+          [
+            { key: 'id', label: 'รหัสซ่อม (ID)' },
+            { key: 'title', label: 'หัวข้อปัญหา/อาการเสีย' },
+            { key: 'machineryId', label: 'รหัสเครื่องจักร' },
+            { key: 'reportedBy', label: 'ผู้แจ้งเสีย' },
+            { key: 'urgency', label: 'ระดับความรุนแรง' },
+            { key: 'estimatedCost', label: 'ค่าใช้จ่ายซ่อม (บาท)' },
+            { key: 'status', label: 'สถานะบำรุงรักษา' },
+            { key: 'createdAt', label: 'วันที่เจอปัญหา' }
+          ],
+          'repair_requests'
+        );
+        break;
+      case 'inventory':
+        exportToExcel(
+          stocks,
+          [
+            { key: 'code', label: 'รหัสสินค้า' },
+            { key: 'name', label: 'ชื่ออะไหล่/สเปค' },
+            { key: 'category', label: 'หมวดหมู่สินค้า' },
+            { key: 'quantity', label: 'จำนวนคงเหลือ' },
+            { key: 'unit', label: 'หน่วยนับ' },
+            { key: 'location', label: 'สถานที่จัดเก็บคลัง' }
+          ],
+          'inventory_stock'
+        );
+        break;
+      case 'machinery':
+        exportToExcel(
+          machinery,
+          [
+            { key: 'code', label: 'รหัสประจำเบอร์' },
+            { key: 'type', label: 'ประเภทเครื่องจักร' },
+            { key: 'brand', label: 'แบรนด์ผู้ผลิต' },
+            { key: 'model', label: 'รุ่นเครื่องจักร' },
+            { key: 'plateNumber', label: 'หมายเลขทะเบียน' },
+            { key: 'serialNumber', label: 'หมายเลขซีเรียล' },
+            { key: 'status', label: 'สถานะการใช้งาน' },
+            { key: 'responsibleName', label: 'ผู้ดูแลรับผิดชอบ' }
+          ],
+          'machinery_catalog'
+        );
+        break;
+      case 'refuels':
+        exportToExcel(
+          refuels,
+          [
+            { key: 'id', label: 'เลขที่ทำรายการ (ID)' },
+            { key: 'machineryCode', label: 'รถเครื่องจักรที่เติม' },
+            { key: 'liters', label: 'ปริมาณเติมน้ำมัน (ลิตร)' },
+            { key: 'pricePerLiter', label: 'ราคาต่อลิตร' },
+            { key: 'totalAmount', label: 'ราคาสุทธิ (บาท)' },
+            { key: 'requestedBy', label: 'ช่างผู้ใช้งาน' },
+            { key: 'status', label: 'สถานะจ่ายน้ำมัน' },
+            { key: 'refuelDate', label: 'วันที่ทำรายการ' }
+          ],
+          'refuel_services'
+        );
+        break;
+      case 'expenses':
+        exportToExcel(
+          expenses,
+          [
+            { key: 'id', label: 'รหัสบัญชี (ID)' },
+            { key: 'description', label: 'ชื่อรายการบัญชี' },
+            { key: 'amount', label: 'จำนวนเงินเบิก (บาท)' },
+            { key: 'category', label: 'หมวดหมู่งบชำระ' },
+            { key: 'recordedBy', label: 'ผู้ทำเอกสาร' },
+            { key: 'date', label: 'วันเวลาจดงบ' },
+            { key: 'siteLocation', label: 'สำหรับไซต์งานปฏิบัติการ' }
+          ],
+          'expenses_records'
+        );
+        break;
+      case 'attendance':
+        exportToExcel(
+          attendances,
+          [
+            { key: 'employeeName', label: 'ชื่อพนักงาน/ช่างผู้ตรวจสอบ' },
+            { key: 'checkInTime', label: 'เวลาเช็คอินเช้า' },
+            { key: 'checkOutTime', label: 'เวลาเช็คเอาท์เย็น' },
+            { key: 'gpsSim', label: 'พิกัดเช็คอิน' },
+            { key: 'checkOutGps', label: 'พิกัดเช็คเอาท์' },
+            { key: 'status', label: 'สถานะเวลางาน' }
+          ],
+          'attendance_logs'
+        );
+        break;
+      case 'submission':
+        exportToExcel(
+          tasks.filter(t => t.status === 'completed' || t.status === 'awaiting_approval'),
+          [
+            { key: 'id', label: 'รหัสงานที่ส่ง (ID)' },
+            { key: 'title', label: 'ชื่องานที่ส่งมอบเสร็จ' },
+            { key: 'assignedTo', label: 'ช่างผู้รายงานงานส่ง' },
+            { key: 'priority', label: 'ความเร่งด่วน' },
+            { key: 'dueDate', label: 'วันเสร็จสิ้นแผน' },
+            { key: 'workTime', label: 'เวลาสถิติชั่วโมงทำ' },
+            { key: 'assignedBy', label: 'ผู้มอบหมายงาน' },
+            { key: 'status', label: 'สถานะ' }
+          ],
+          'job_submissions'
+        );
+        break;
+      default:
+        alert("หน้าหลักโมดูลนี้ ไม่สนับสนุนการจัดทำตารางดิบ Excel");
+    }
+  };
+
   // Nav items definition
   const sidebarNavItems = [
     { id: 'dashboard', label: 'Dashboard ข้อมูลหลัก', icon: LayoutDashboard },
     { id: 'schedule', label: 'ปฏิทินแผนงานช่าง', icon: Briefcase },
+    { id: 'submission', label: 'หน้าส่งงานช่างปฏิบัติการ', icon: FileCheck },
     { id: 'repairs', label: 'แจ้งซ่อมเครื่องยนต์', icon: Wrench },
     { id: 'inventory', label: 'คลังอะไหล่และสเปค', icon: Package },
     { id: 'machinery', label: 'สารบัตเครื่องจักร', icon: Building2 },
     { id: 'refuels', label: 'ขอรับเติมน้ำมัน', icon: Fuel },
     { id: 'expenses', label: 'บัญชีงบ & AI Advisor', icon: Coins },
     { id: 'attendance', label: 'ลงเวลากล้อง GPS', icon: UserCheck },
+    { id: 'reports', label: 'รายงาน (Reports Center)', icon: BarChart3 },
   ];
 
   return (
@@ -622,6 +772,16 @@ export default function App() {
                 : `Offline (${syncQueueSize} pending)`}
             </span>
           </div>
+
+          {/* Quick Excel Export button */}
+          <button 
+            onClick={handleExportActiveTab}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-emerald-500/20 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 font-bold text-[10.5px] transition-all cursor-pointer shadow-sm active:scale-95"
+            title="กดเพื่อส่งออกข้อมูลตารางหน้าปัจจุบันลงโปรแกรม Excel ฟริแมตคัดกรองภาษาไทย 100%"
+          >
+            <Download className="w-3.5 h-3.5 text-emerald-600" />
+            <span className="hidden sm:inline">ส่งออกรายงาน Excel</span>
+          </button>
 
           {/* QR Scanner Tool */}
           <button 
@@ -794,6 +954,30 @@ export default function App() {
               attendances={attendances}
               onAddAttendance={handleAddAttendance}
               onUpdateAttendance={handleUpdateAttendance}
+            />
+          )}
+
+          {activeTab === 'submission' && (
+            <JobSubmissionView
+              tasks={tasks}
+              onTaskUpdated={(updated) => {
+                setTasks(prev => prev.map(t => t.id === updated.id ? updated : t));
+              }}
+              theme={theme === 'white' ? 'blue' : theme}
+            />
+          )}
+
+          {activeTab === 'reports' && (
+            <ReportsCenterView
+              tasks={tasks}
+              repairs={repairs}
+              stocks={stocks}
+              machinery={machinery}
+              refuels={refuels}
+              expenses={expenses}
+              attendances={attendances}
+              theme={theme}
+              onNavigate={handleNavigate}
             />
           )}
 

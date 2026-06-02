@@ -58,9 +58,25 @@ export async function sendLineTaskNotification(task: WorkScheduleTask, machinery
     task.priority === 'medium' ? '#6f42c1' : '#198754';
   
   const priorityText = 
-    task.priority === 'critical' ? '🔴 วิกฤต (Critical)' :
-    task.priority === 'high' ? '🟠 สูง (High)' :
-    task.priority === 'medium' ? '🟣 ปานกลาง (Medium)' : '🟢 ต่ำ (Low)';
+    task.priority === 'critical' ? 'วิกฤต (Critical)' :
+    task.priority === 'high' ? 'สูง (High)' :
+    task.priority === 'medium' ? 'ปานกลาง (Medium)' : 'ต่ำ (Low)';
+
+  const displayId = task.id.length > 24 ? task.id.substring(0, 18) + '...' : task.id;
+  const displayWorkTime = task.workTime || '08:00';
+  const displayDueDate = task.dueDate || 'ไม่ระบุ';
+
+  const extraMachinery = task.machineries && task.machineries.length > 0
+    ? task.machineries.join(', ')
+    : 'ไม่ได้ระบุ';
+
+  const locationsText = task.locations && task.locations.length > 0
+    ? task.locations.join(', ')
+    : (task.gpsLocName || 'ไม่ระบุพิกัด');
+
+  const employeesText = task.employees && task.employees.length > 0
+    ? task.employees.join(', ')
+    : (task.assignedTo || 'ไม่ได้ระบุ');
 
   const flexJson = {
     "type": "flex",
@@ -76,10 +92,10 @@ export async function sendLineTaskNotification(task: WorkScheduleTask, machinery
         "contents": [
           {
             "type": "text",
-            "text": "📅 มอบหมายแผนงานปฏิบัติการ",
+            "text": "📅 มอบหมายแผนงานป...",
             "weight": "bold",
             "color": "#ffffff",
-            "size": "xl"
+            "size": "lg"
           },
           {
             "type": "text",
@@ -97,40 +113,28 @@ export async function sendLineTaskNotification(task: WorkScheduleTask, machinery
         "contents": [
           {
             "type": "box",
-            "layout": "horizontal",
-            "contents": [
-              {
-                "type": "text",
-                "text": "เลขที่อ้างอิง",
-                "size": "sm",
-                "color": "#94a3b8"
-              },
-              {
-                "type": "text",
-                "text": task.id,
-                "size": "sm",
-                "color": "#64748b",
-                "align": "end",
-                "weight": "bold"
-              }
-            ]
-          },
-          {
-            "type": "separator",
-            "margin": "md",
-            "color": "#f1f5f9"
-          },
-          {
-            "type": "box",
             "layout": "vertical",
-            "margin": "md",
             "spacing": "sm",
             "contents": [
               {
                 "type": "box",
                 "layout": "horizontal",
                 "contents": [
-                  { "type": "text", "text": "วันที่ส่งแผนงาน", "size": "sm", "color": "#64748b" },
+                  { "type": "text", "text": "เลขที่อ้างอิง", "size": "sm", "color": "#94a3b8" },
+                  { "type": "text", "text": displayId, "size": "sm", "color": "#1e293b", "align": "end" }
+                ]
+              },
+              {
+                "type": "separator",
+                "margin": "md",
+                "color": "#f1f5f9"
+              },
+              {
+                "type": "box",
+                "layout": "horizontal",
+                "margin": "md",
+                "contents": [
+                  { "type": "text", "text": "วันที่มอบหมาย", "size": "sm", "color": "#64748b" },
                   { "type": "text", "text": formattedDate, "size": "sm", "color": "#1e293b", "align": "end", "weight": "bold" }
                 ]
               },
@@ -138,7 +142,7 @@ export async function sendLineTaskNotification(task: WorkScheduleTask, machinery
                 "type": "box",
                 "layout": "horizontal",
                 "contents": [
-                  { "type": "text", "text": "เวลาส่งมอบงาน", "size": "sm", "color": "#64748b" },
+                  { "type": "text", "text": "เวลาส่งแผนงาน", "size": "sm", "color": "#64748b" },
                   { "type": "text", "text": formattedTime, "size": "sm", "color": "#1e293b", "align": "end" }
                 ]
               },
@@ -146,8 +150,24 @@ export async function sendLineTaskNotification(task: WorkScheduleTask, machinery
                 "type": "box",
                 "layout": "horizontal",
                 "contents": [
+                  { "type": "text", "text": "วันที่ให้เข้าทำงาน", "size": "sm", "color": "#64748b" },
+                  { "type": "text", "text": displayDueDate, "size": "sm", "color": "#00b894", "align": "end", "weight": "bold" }
+                ]
+              },
+              {
+                "type": "box",
+                "layout": "horizontal",
+                "contents": [
+                  { "type": "text", "text": "เวลาทำงาน", "size": "sm", "color": "#64748b" },
+                  { "type": "text", "text": displayWorkTime, "size": "sm", "color": "#03a9f4", "align": "end", "weight": "bold" }
+                ]
+              },
+              {
+                "type": "box",
+                "layout": "horizontal",
+                "contents": [
                   { "type": "text", "text": "ช่างผู้ทำงาน", "size": "sm", "color": "#64748b" },
-                  { "type": "text", "text": task.assignedTo, "size": "sm", "color": "#111827", "align": "end", "weight": "bold" }
+                  { "type": "text", "text": task.assignedTo || 'ไม่ได้ระบุ', "size": "sm", "color": "#1e293b", "align": "end", "weight": "bold" }
                 ]
               }
             ]
@@ -197,8 +217,18 @@ export async function sendLineTaskNotification(task: WorkScheduleTask, machinery
                 "spacing": "sm",
                 "margin": "sm",
                 "contents": [
+                  { "type": "text", "text": "อุปกรณ์/รถยนต์", "color": "#64748b", "size": "xs", "flex": 3 },
+                  { "type": "text", "text": extraMachinery, "wrap": true, "color": "#00a8ff", "size": "xs", "flex": 5, "weight": "bold" }
+                ]
+              },
+              {
+                "type": "box",
+                "layout": "baseline",
+                "spacing": "sm",
+                "margin": "sm",
+                "contents": [
                   { "type": "text", "text": "กำหนดส่งมอบ", "color": "#64748b", "size": "xs", "flex": 3 },
-                  { "type": "text", "text": task.dueDate || 'ไม่ระบุ', "wrap": true, "color": "#334155", "size": "xs", "flex": 5, "weight": "bold" }
+                  { "type": "text", "text": displayDueDate, "wrap": true, "color": "#1e293b", "size": "xs", "flex": 5, "weight": "bold" }
                 ]
               },
               {
@@ -208,7 +238,7 @@ export async function sendLineTaskNotification(task: WorkScheduleTask, machinery
                 "margin": "sm",
                 "contents": [
                   { "type": "text", "text": "ความด่วนของงาน", "color": "#64748b", "size": "xs", "flex": 3 },
-                  { "type": "text", "text": priorityText, "wrap": true, "color": priorityColor, "size": "xs", "flex": 5, "weight": "bold" }
+                  { "type": "text", "text": `● ${priorityText}`, "wrap": true, "color": priorityColor, "size": "xs", "flex": 5, "weight": "bold" }
                 ]
               },
               {
@@ -218,7 +248,17 @@ export async function sendLineTaskNotification(task: WorkScheduleTask, machinery
                 "margin": "sm",
                 "contents": [
                   { "type": "text", "text": "สถานที่หน้างาน", "color": "#64748b", "size": "xs", "flex": 3 },
-                  { "type": "text", "text": task.gpsLocName || 'ไม่ระบุพิกัด', "wrap": true, "color": "#334155", "size": "xs", "flex": 5, "weight": "bold" }
+                  { "type": "text", "text": locationsText, "wrap": true, "color": "#334155", "size": "xs", "flex": 5, "weight": "bold" }
+                ]
+              },
+              {
+                "type": "box",
+                "layout": "baseline",
+                "spacing": "sm",
+                "margin": "sm",
+                "contents": [
+                  { "type": "text", "text": "พนักงานปฏิบัติการ", "color": "#64748b", "size": "xs", "flex": 3 },
+                  { "type": "text", "text": employeesText, "wrap": true, "color": "#10b981", "size": "xs", "flex": 5, "weight": "bold" }
                 ]
               }
             ]
@@ -1258,14 +1298,16 @@ export async function sendLineAttendanceNotification(attendance: AttendanceLog) 
             "text": statusTitle,
             "weight": "bold",
             "color": "#ffffff",
-            "size": "lg"
+            "size": "lg",
+            "wrap": true
           },
           {
             "type": "text",
             "text": "ระบบบันทึกเวลาปฏิบัติงานออนไลน์ FlowWork 360",
             "color": "#f0fdf4",
             "size": "xs",
-            "margin": "sm"
+            "margin": "sm",
+            "wrap": true
           }
         ]
       },
@@ -1305,7 +1347,8 @@ export async function sendLineAttendanceNotification(attendance: AttendanceLog) 
                 "size": "sm",
                 "color": "#334155",
                 "align": "end",
-                "weight": "bold"
+                "weight": "bold",
+                "wrap": true
               }
             ]
           },
@@ -1320,7 +1363,8 @@ export async function sendLineAttendanceNotification(attendance: AttendanceLog) 
             "weight": "bold",
             "size": "md",
             "color": "#0f172a",
-            "margin": "md"
+            "margin": "md",
+            "wrap": true
           },
           {
             "type": "box",
@@ -1336,7 +1380,7 @@ export async function sendLineAttendanceNotification(attendance: AttendanceLog) 
                 "spacing": "sm",
                 "contents": [
                   { "type": "text", "text": "ตำแหน่ง/บทบาท", "color": "#64748b", "size": "xs", "flex": 4 },
-                  { "type": "text", "text": attendance.role || 'ช่างควบคุมเครื่องจักร', "color": "#334155", "size": "xs", "flex": 5, "weight": "bold" }
+                  { "type": "text", "text": attendance.role || 'ช่างควบคุมเครื่องจักร', "color": "#334155", "size": "xs", "flex": 5, "weight": "bold", "wrap": true }
                 ]
               },
               {
@@ -1346,7 +1390,7 @@ export async function sendLineAttendanceNotification(attendance: AttendanceLog) 
                 "margin": "sm",
                 "contents": [
                   { "type": "text", "text": "แผนก/ส่วนงาน", "color": "#64748b", "size": "xs", "flex": 4 },
-                  { "type": "text", "text": "กองพัสดุและซ่อมบำรุง", "color": "#334155", "size": "xs", "flex": 5 }
+                  { "type": "text", "text": "กองพัสดุและซ่อมบำรุง", "color": "#334155", "size": "xs", "flex": 5, "wrap": true }
                 ]
               },
               {
@@ -1356,7 +1400,7 @@ export async function sendLineAttendanceNotification(attendance: AttendanceLog) 
                 "margin": "sm",
                 "contents": [
                   { "type": "text", "text": "ไซต์ปฏิบัติงาน", "color": "#64748b", "size": "xs", "flex": 4 },
-                  { "type": "text", "text": attendance.siteName || 'ไซต์งานหลัก CMMS', "color": "#334155", "size": "xs", "flex": 5 }
+                  { "type": "text", "text": attendance.siteName || 'ไซต์งานหลัก CMMS', "color": "#334155", "size": "xs", "flex": 5, "wrap": true }
                 ]
               },
               {
@@ -1366,7 +1410,7 @@ export async function sendLineAttendanceNotification(attendance: AttendanceLog) 
                 "margin": "sm",
                 "contents": [
                   { "type": "text", "text": "บันทึกเวลา", "color": "#64748b", "size": "xs", "flex": 4 },
-                  { "type": "text", "text": timeLabel, "color": headerBgColor, "size": "xs", "flex": 5, "weight": "bold" }
+                  { "type": "text", "text": timeLabel, "color": headerBgColor, "size": "xs", "flex": 5, "weight": "bold", "wrap": true }
                 ]
               },
               {
@@ -1376,7 +1420,7 @@ export async function sendLineAttendanceNotification(attendance: AttendanceLog) 
                 "margin": "sm",
                 "contents": [
                   { "type": "text", "text": "พิกัดดาวเทียม (GPS)", "color": "#64748b", "size": "xs", "flex": 4 },
-                  { "type": "text", "text": isCheckOut ? (attendance.gpsLocOut || 'ไม่ระบุ') : attendance.gpsLocIn, "color": "#3b82f6", "size": "xs", "flex": 5, "weight": "bold" }
+                  { "type": "text", "text": isCheckOut ? (attendance.gpsLocOut || 'ไม่ระบุ') : attendance.gpsLocIn, "color": "#3b82f6", "size": "xs", "flex": 5, "weight": "bold", "wrap": true }
                 ]
               },
               {
@@ -1386,7 +1430,7 @@ export async function sendLineAttendanceNotification(attendance: AttendanceLog) 
                 "margin": "sm",
                 "contents": [
                   { "type": "text", "text": "ภาพถ่ายใบหน้า", "color": "#64748b", "size": "xs", "flex": 4 },
-                  { "type": "text", "text": targetPhoto && targetPhoto.startsWith('data:') ? "📸 เซลฟี่ใบหน้าจริงสำเร็จ" : "👤 ใช้ภาพโปรไฟล์แทน", "color": "#0d9488", "size": "xs", "flex": 5, "weight": "bold" }
+                  { "type": "text", "text": targetPhoto && targetPhoto.startsWith('data:') ? "📸 เซลฟี่ใบหน้าจริงสำเร็จ" : "👤 ใช้ภาพโปรไฟล์แทน", "color": "#0d9488", "size": "xs", "flex": 5, "weight": "bold", "wrap": true }
                 ]
               },
               {
@@ -1396,7 +1440,7 @@ export async function sendLineAttendanceNotification(attendance: AttendanceLog) 
                 "margin": "sm",
                 "contents": [
                   { "type": "text", "text": "การทำงานล่วงเวลา (OT)", "color": "#64748b", "size": "xs", "flex": 4 },
-                  { "type": "text", "text": attendance.isOvertime ? "อนุมัติค่าล่วงเวลา (มี OT) 💰" : "ชั่วโมงงานปกติ", "color": attendance.isOvertime ? "#eab308" : "#64748b", "size": "xs", "flex": 5, "weight": "bold" }
+                  { "type": "text", "text": attendance.isOvertime ? "อนุมัติค่าล่วงเวลา (มี OT) 💰" : "ชั่วโมงงานปกติ", "color": attendance.isOvertime ? "#eab308" : "#64748b", "size": "xs", "flex": 5, "weight": "bold", "wrap": true }
                 ]
               }
             ]
@@ -1555,6 +1599,140 @@ export async function sendLineExpenseNotification(expense: ExpenseRecord) {
         ]
       }
     }
+  };
+
+  return await pushLineFlexMessage(flexJson);
+}
+
+/**
+ * 9. [EMERALD] Builds and sends an automated LINE Flex message for new Job Submissions (หน้าส่งงาน)
+ */
+export async function sendLineJobSubmissionNotification(
+  taskTitle: string,
+  submitter: string,
+  description: string,
+  progress: number,
+  gps: string,
+  photoUrl?: string
+) {
+  const formattedDate = new Date().toLocaleDateString('th-TH');
+  const formattedTime = new Date().toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' });
+
+  const bubble: any = {
+    "type": "bubble",
+    "size": "mega",
+    "header": {
+      "type": "box",
+      "layout": "vertical",
+      "backgroundColor": "#10b981",
+      "paddingAll": "xl",
+      "contents": [
+        {
+          "type": "text",
+          "text": "⚙️ รายงานส่งมอบแผนงานสำเร็จ",
+          "weight": "bold",
+          "color": "#ffffff",
+          "size": "lg"
+        },
+        {
+          "type": "text",
+          "text": "ระบบแจ้งส่งรายงานและปิดตารางงาน FlowWork CMMS",
+          "color": "#d1fae5",
+          "size": "xs",
+          "margin": "sm"
+        }
+      ]
+    },
+    "body": {
+      "type": "box",
+      "layout": "vertical",
+      "paddingAll": "xl",
+      "contents": [
+        {
+          "type": "text",
+          "text": `ชื่องานปฏิบัติการ: ${taskTitle}`,
+          "weight": "bold",
+          "size": "md",
+          "color": "#0f172a",
+          "wrap": true
+        },
+        {
+          "type": "box",
+          "layout": "vertical",
+          "margin": "lg",
+          "backgroundColor": "#f8fafc",
+          "paddingAll": "md",
+          "cornerRadius": "md",
+          "contents": [
+            {
+              "type": "box",
+              "layout": "baseline",
+              "spacing": "sm",
+              "contents": [
+                { "type": "text", "text": "ผู้ลงชื่อส่งงาน", "color": "#64748b", "size": "xs", "flex": 4, "weight": "bold" },
+                { "type": "text", "text": submitter, "color": "#1e293b", "size": "xs", "flex": 5, "weight": "bold" }
+              ]
+            },
+            {
+              "type": "box",
+              "layout": "baseline",
+              "spacing": "sm",
+              "margin": "sm",
+              "contents": [
+                { "type": "text", "text": "ระดับความสำเร็จ", "color": "#64748b", "size": "xs", "flex": 4 },
+                { "type": "text", "text": `${progress}%`, "color": progress === 100 ? "#10b981" : "#f59e0b", "size": "xs", "flex": 5, "weight": "bold" }
+              ]
+            },
+            {
+              "type": "box",
+              "layout": "baseline",
+              "spacing": "sm",
+              "margin": "sm",
+              "contents": [
+                { "type": "text", "text": "รายละเอียดสรุป", "color": "#64748b", "size": "xs", "flex": 4 },
+                { "type": "text", "text": description || 'ไม่มีรายละเอียดเพิ่มเติม', "color": "#334155", "size": "xs", "flex": 5, "wrap": true }
+              ]
+            },
+            {
+              "type": "box",
+              "layout": "baseline",
+              "spacing": "sm",
+              "margin": "sm",
+              "contents": [
+                { "type": "text", "text": "วันเวลาที่ส่งงาน", "color": "#64748b", "size": "xs", "flex": 4 },
+                { "type": "text", "text": `${formattedDate} ${formattedTime} น.`, "color": "#475569", "size": "xs", "flex": 5 }
+              ]
+            },
+            {
+              "type": "box",
+              "layout": "baseline",
+              "spacing": "sm",
+              "margin": "sm",
+              "contents": [
+                { "type": "text", "text": "GPS หน้างาน", "color": "#64748b", "size": "xs", "flex": 4 },
+                { "type": "text", "text": gps || 'ไม่ได้ระบุพิกัด', "color": "#475569", "size": "xs", "flex": 5 }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  };
+
+  if (photoUrl) {
+    bubble.hero = {
+      "type": "image",
+      "url": photoUrl,
+      "size": "full",
+      "aspectRatio": "16:11",
+      "aspectMode": "cover"
+    };
+  }
+
+  const flexJson = {
+    "type": "flex",
+    "altText": `⚙️ ส่งงานสำเร็จ (${progress}%): ${taskTitle}`,
+    "contents": bubble
   };
 
   return await pushLineFlexMessage(flexJson);

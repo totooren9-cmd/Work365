@@ -15,7 +15,6 @@ import {
   INITIAL_TASKS, 
   INITIAL_STOCK, 
   INITIAL_ISSUANCES, 
-  INITIAL_ATTENDANCE_LOGS, 
   INITIAL_REPAIRS, 
   INITIAL_REFUELS, 
   INITIAL_EXPENSES 
@@ -82,40 +81,87 @@ export async function saveMachinery(m: HeavyMachinery) {
 export async function getTasks(): Promise<WorkScheduleTask[]> {
   const data = await runQuery(supabase.from('work_schedule_tasks').select('*'), null);
   if (!data) {
-    return INITIAL_TASKS.map(t => ({
-      ...t,
-      id: toUUID(t.id),
-      machineryId: t.machineryId ? toUUID(t.machineryId) : undefined
-    }));
+    return [];
   }
-  return data.map((r: any) => ({
-    id: toUUID(r.id),
-    title: r.title,
-    description: r.description || '',
-    machineryId: r.machinery_id ? toUUID(r.machinery_id) : undefined,
-    assignedTo: r.assigned_to,
-    priority: r.priority || 'medium',
-    dueDate: r.due_date,
-    gpsLocName: r.gps_location_name || '',
-    status: r.status || 'pending',
-    timeline: r.timeline || [
-      { status: r.status || 'pending', timestamp: new Date(r.created_at || Date.now()).toISOString().replace('T', ' ').substring(0, 16), note: 'สร้างรายการงานแล้ว' }
-    ],
-    comments: r.comments || [],
-    photoUrls: r.photo_urls || []
-  }));
+  return data.map((r: any) => {
+    let descriptionText = r.description || '';
+    let locations: string[] = [];
+    let supervisors: string[] = [];
+    let machineries: string[] = [];
+    let employees: string[] = [];
+    let assignedBy = '';
+    let workTime = '';
+
+    try {
+      if (descriptionText.startsWith('{') || descriptionText.startsWith('[')) {
+        const parsed = JSON.parse(descriptionText);
+        descriptionText = parsed.description || '';
+        locations = parsed.locations || [];
+        supervisors = parsed.supervisors || [];
+        machineries = parsed.machineries || [];
+        employees = parsed.employees || [];
+        assignedBy = parsed.assignedBy || '';
+        workTime = parsed.workTime || '';
+      } else {
+        locations = r.gps_location_name ? [r.gps_location_name] : [];
+        employees = r.assigned_to ? [r.assigned_to] : [];
+      }
+    } catch (e) {
+      // ignore
+    }
+
+    if (locations.length === 0 && r.gps_location_name) {
+      locations = [r.gps_location_name];
+    }
+    if (employees.length === 0 && r.assigned_to) {
+      employees = [r.assigned_to];
+    }
+
+    return {
+      id: toUUID(r.id),
+      title: r.title,
+      description: descriptionText,
+      machineryId: r.machinery_id ? toUUID(r.machinery_id) : undefined,
+      assignedTo: employees.join(', ') || r.assigned_to,
+      priority: r.priority || 'medium',
+      dueDate: r.due_date,
+      gpsLocName: locations.join(', ') || r.gps_location_name || '',
+      status: r.status || 'pending',
+      timeline: r.timeline || [
+        { status: r.status || 'pending', timestamp: new Date(r.created_at || Date.now()).toISOString().replace('T', ' ').substring(0, 16), note: 'สร้างรายการงานแล้ว' }
+      ],
+      comments: r.comments || [],
+      photoUrls: r.photo_urls || [],
+      locations,
+      supervisors,
+      machineries,
+      employees,
+      assignedBy,
+      workTime
+    };
+  });
 }
 
 export async function saveTask(t: WorkScheduleTask) {
+  const meta = {
+    description: t.description || '',
+    locations: t.locations || (t.gpsLocName ? [t.gpsLocName] : []),
+    supervisors: t.supervisors || [],
+    machineries: t.machineries || (t.machineryId ? [t.machineryId] : []),
+    employees: t.employees || (t.assignedTo ? [t.assignedTo] : []),
+    assignedBy: t.assignedBy || '',
+    workTime: t.workTime || ''
+  };
+
   const payload = {
     id: toUUID(t.id),
     title: t.title,
-    description: t.description,
+    description: JSON.stringify(meta),
     machinery_id: t.machineryId ? toUUID(t.machineryId) : null,
-    assigned_to: t.assignedTo,
+    assigned_to: t.employees && t.employees.length > 0 ? t.employees[0] : t.assignedTo,
     priority: t.priority,
     due_date: t.dueDate,
-    gps_location_name: t.gpsLocName,
+    gps_location_name: t.locations && t.locations.length > 0 ? t.locations[0] : (t.gpsLocName || ''),
     status: t.status,
     photo_urls: t.photoUrls || [],
     timeline: t.timeline || [],
@@ -208,38 +254,59 @@ export async function saveIssuance(iss: InventoryIssuance) {
 
 // 5. ATTENDANCE LOG MAPS
 export async function getAttendances(): Promise<AttendanceLog[]> {
-  const data = await runQuery(supabase.from('work_attendances').select('*'), null);
+  const data = await runQuery(supabase.from('work_attendances').select('*').order('created_at', { ascending: false }), null);
   if (!data) {
-    return INITIAL_ATTENDANCE_LOGS.map(a => ({
-      ...a,
-      id: toUUID(a.id)
-    }));
+    return [];
   }
-  return data.map((r: any) => ({
-    id: toUUID(r.id),
-    employeeName: r.employee_name,
-    role: 'ช่างควบคุมเครื่องจักร',
-    checkInTime: r.check_in ? r.check_in.substring(0, 5) + ' น.' : '--:--',
-    checkOutTime: r.check_out ? r.check_out.substring(0, 5) + ' น.' : undefined,
-    siteName: 'ไซต์งานชลประทาน B',
-    isOvertime: Number(r.ot_hours || 0) > 0,
-    photoUrl: r.photo_url || 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&q=80&w=150',
-    gpsLocIn: r.gps_coordinates || '18.7961, 98.9792',
-    gpsLocOut: r.gps_coordinates || undefined
-  }));
+  return data.map((r: any) => {
+    let meta: any = {};
+    try {
+      if (r.photo_url && (r.photo_url.startsWith('{') || r.photo_url.startsWith('['))) {
+        meta = JSON.parse(r.photo_url);
+      } else {
+        meta = { photoUrl: r.photo_url || '' };
+      }
+    } catch (e) {
+      meta = { photoUrl: r.photo_url || '' };
+    }
+
+    return {
+      id: toUUID(r.id),
+      employeeName: r.employee_name,
+      role: meta.role || 'ช่างควบคุมเครื่องจักร',
+      checkInTime: r.check_in ? r.check_in.substring(0, 5) + ' น.' : '--:--',
+      checkOutTime: r.check_out ? r.check_out.substring(0, 5) + ' น.' : undefined,
+      siteName: meta.siteName || 'ไซต์งานชลประทาน B',
+      isOvertime: Number(r.ot_hours || 0) > 0 || !!meta.isOvertime,
+      photoUrl: meta.photoUrl || 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&q=80&w=150',
+      photoUrlOut: meta.photoUrlOut || undefined,
+      gpsLocIn: r.gps_coordinates || '18.7961, 98.9792',
+      gpsLocOut: meta.gpsLocOut || undefined
+    };
+  });
 }
 
 export async function saveAttendance(log: AttendanceLog) {
   const checkIn = log.checkInTime.replace(' น.', '').trim();
   const checkOut = log.checkOutTime ? log.checkOutTime.replace(' น.', '').trim() : null;
+
+  const meta = {
+    photoUrl: log.photoUrl || '',
+    photoUrlOut: log.photoUrlOut || '',
+    siteName: log.siteName || '',
+    role: log.role || '',
+    gpsLocOut: log.gpsLocOut || '',
+    isOvertime: log.isOvertime || false
+  };
+
   const payload = {
     id: toUUID(log.id),
     employee_name: log.employeeName,
     check_in: checkIn.length === 5 ? checkIn + ':00' : '08:00:00',
     check_out: checkOut && checkOut.length === 5 ? checkOut + ':00' : null,
     work_date: new Date().toISOString().split('T')[0],
-    gps_coordinates: log.gpsLocIn,
-    photo_url: log.photoUrl || '',
+    gps_coordinates: log.gpsLocIn || '18.7961, 98.9792',
+    photo_url: JSON.stringify(meta),
     status: 'present',
     ot_hours: log.isOvertime ? 2.0 : 0.0
   };
