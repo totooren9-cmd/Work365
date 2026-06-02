@@ -692,9 +692,26 @@ export default function App() {
 
           {/* Logo visual styled with premium soft identity */}
           <div className="flex items-center gap-2">
-            <div className="w-9 h-9 bg-gradient-to-tr from-amber-400 to-yellow-200 rounded-xl flex items-center justify-center font-black text-amber-900 text-base shadow-[0_4px_12px_-2px_rgba(251,191,36,0.5)] border border-amber-100">
-              FW
-            </div>
+            <img 
+              src="https://lh3.googleusercontent.com/d/10FpeNYqKjyBt6ZRv9YodUd6rSTcgolzP" 
+              alt="FlowWork CMMS Logo" 
+              className="w-10 h-10 object-cover rounded-xl shadow-md border border-stone-100 bg-white"
+              referrerPolicy="no-referrer"
+              onError={(e) => {
+                const target = e.target as HTMLImageElement;
+                target.style.display = 'none';
+                const parent = target.parentElement;
+                if (parent) {
+                  const existingFallback = parent.querySelector('.logo-fallback');
+                  if (!existingFallback) {
+                    const fallback = document.createElement('div');
+                    fallback.className = 'logo-fallback w-10 h-10 bg-gradient-to-tr from-amber-400 to-yellow-200 rounded-xl flex items-center justify-center font-black text-amber-900 text-sm shadow-[0_4px_12px_-2px_rgba(251,191,36,0.5)] border border-amber-100';
+                    fallback.innerText = 'FW';
+                    parent.insertBefore(fallback, parent.firstChild);
+                  }
+                }
+              }}
+            />
             <div>
               <div className="flex items-center gap-1.5 leading-none">
                 <span className="font-display font-bold text-sm tracking-tight text-stone-800">FlowWork CMMS</span>

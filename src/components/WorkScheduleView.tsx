@@ -55,10 +55,16 @@ export default function WorkScheduleView({
   const [activeTaskId, setActiveTaskId] = useState<string | null>(tasks[0]?.id || null);
   const [showAddForm, setShowAddForm] = useState(initialShowAddForm);
   const [isEditing, setIsEditing] = useState(false);
-  const [selectedDayTab, setSelectedDayTab] = useState('2026-05-28'); // Default to current metadata date
+  const [selectedDayTab, setSelectedDayTab] = useState(() => {
+    const d = new Date();
+    const yyyy = d.getFullYear();
+    const mm = String(d.getMonth() + 1).padStart(2, '0');
+    const dd = String(d.getDate()).padStart(2, '0');
+    return `${yyyy}-${mm}-${dd}`;
+  });
   
-  const [currentYear, setCurrentYear] = useState(2026);
-  const [currentMonth, setCurrentMonth] = useState(4); // 0-indexed: May is 4 (May 2026)
+  const [currentYear, setCurrentYear] = useState(() => new Date().getFullYear());
+  const [currentMonth, setCurrentMonth] = useState(() => new Date().getMonth()); // 0-indexed
 
   // Synchronize calendar view month with selectedDayTab
   React.useEffect(() => {
@@ -93,7 +99,13 @@ export default function WorkScheduleView({
   const [formMach, setFormMach] = useState('');
   const [formAssign, setFormAssign] = useState('');
   const [formPriority, setFormPriority] = useState<TaskPriority>('medium');
-  const [formDueDate, setFormDueDate] = useState('2026-05-30');
+  const [formDueDate, setFormDueDate] = useState(() => {
+    const d = new Date();
+    const yyyy = d.getFullYear();
+    const mm = String(d.getMonth() + 1).padStart(2, '0');
+    const dd = String(d.getDate()).padStart(2, '0');
+    return `${yyyy}-${mm}-${dd}`;
+  });
   const [formGps, setFormGps] = useState('ไซต์ก่อสร้างคลอง ชลประทานเฟส 3');
   
   // Lists and Inputs for Rich Scheduling Form
@@ -308,7 +320,7 @@ export default function WorkScheduleView({
     return tasks.filter(t => {
       if (t.status === 'completed' || t.status === 'cancelled') return false;
       const tDate = new Date(t.dueDate);
-      const today = new Date('2026-05-28');
+      const today = new Date();
       const diffTime = tDate.getTime() - today.getTime();
       const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
       return diffDays >= -2 && diffDays <= 4; // due within 4 days, or overdue up to 2 days
@@ -996,6 +1008,19 @@ export default function WorkScheduleView({
                           className="px-2.5 py-1 text-[10px] bg-white border border-stone-200 rounded-lg hover:bg-stone-50 select-none shadow-sm cursor-pointer"
                         >
                           ถัดไป ▶
+                        </button>
+                        <button 
+                          type="button"
+                          onClick={() => {
+                            const today = new Date();
+                            const yStr = today.getFullYear();
+                            const mStr = String(today.getMonth() + 1).padStart(2, '0');
+                            const dStr = String(today.getDate()).padStart(2, '0');
+                            setSelectedDayTab(`${yStr}-${mStr}-${dStr}`);
+                          }}
+                          className="ml-1.5 px-2.5 py-1 text-[10px] bg-orange-500 hover:bg-orange-600 font-bold text-white rounded-lg select-none shadow-sm cursor-pointer transition-colors"
+                        >
+                          📅 เดือนปัจจุบัน
                         </button>
                       </div>
                       <span className="text-[10px] text-orange-600 bg-orange-500/10 px-3 py-1 rounded-full font-black">
