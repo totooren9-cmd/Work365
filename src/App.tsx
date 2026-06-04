@@ -22,7 +22,8 @@ import {
   Briefcase,
   FileCheck,
   Download,
-  BarChart3
+  BarChart3,
+  Settings
 } from 'lucide-react';
 
 // Import Views
@@ -41,6 +42,7 @@ import LineFlexBuilder from './components/LineFlexBuilder';
 import DatabaseSchemaView from './components/DatabaseSchemaView';
 import QrScannerModal from './components/QrScannerModal';
 import ReportsCenterView from './components/ReportsCenterView';
+import LineSettingsView from './components/LineSettingsView';
 
 import { 
   HeavyMachinery, 
@@ -677,6 +679,7 @@ export default function App() {
     { id: 'expenses', label: 'บัญชีงบ & AI Advisor', icon: Coins },
     { id: 'attendance', label: 'ลงเวลากล้อง GPS', icon: UserCheck },
     { id: 'reports', label: 'รายงาน (Reports Center)', icon: BarChart3 },
+    { id: 'settings', label: 'ตั้งค่าการแจ้งเตือน LINE', icon: Settings },
   ];
 
   return (
@@ -943,6 +946,10 @@ export default function App() {
               theme={theme}
               onNavigate={handleNavigate}
             />
+          )}
+
+          {activeTab === 'settings' && (
+            <LineSettingsView />
           )}
 
 

@@ -1,25 +1,104 @@
 import { WorkScheduleTask, RepairRequest, HeavyMachinery, InventoryIssuance, StockItem, RefuelStatus, AttendanceLog, ExpenseRecord } from '../types';
-import { saveGoogleDriveUpload } from '../supabaseService';
+import { saveGoogleDriveUpload, getLineSettingsFromDb } from '../supabaseService';
 
 
 const DEFAULT_CHANNEL_ACCESS_TOKEN = "LOsEWhXvFup41WFZWMyMZtUwqGFWws583/YbGvEGtADMlAEfw1kJoc61miQlxR155ayovX2w+wQnWAAUGqKInRMkg43XgFvxcXoo8QkbPbDOso+a0PpwwBQDFUjQYF9LIuiemAo9f/iqKRxsJh6UXgdB04t89/1O/w1cDnyilFU=";
 const DEFAULT_GROUP_ID = "C94ac0eec7f7dc7b97fd2767104d1e7a0";
 
-export function getLineSettings() {
-  const customToken = typeof window !== 'undefined' ? localStorage.getItem('LINE_CHANNEL_ACCESS_TOKEN') : null;
-  const customGroupId = typeof window !== 'undefined' ? localStorage.getItem('LINE_GROUP_ID') : null;
-  return {
-    channelAccessToken: customToken || DEFAULT_CHANNEL_ACCESS_TOKEN,
-    groupId: customGroupId || DEFAULT_GROUP_ID
-  };
+export function getLineSettings(category: 'attendance' | 'work' | 'operations' | 'fuel' | 'test' = 'work') {
+  if (typeof window === 'undefined') {
+    return {
+      channelAccessToken: DEFAULT_CHANNEL_ACCESS_TOKEN,
+      groupId: DEFAULT_GROUP_ID
+    };
+  }
+
+  // Fallback shared token
+  const customChannelAuth = localStorage.getItem('LINE_CHANNEL_ACCESS_TOKEN');
+
+  if (category === 'attendance') {
+    const token = localStorage.getItem('LINE_TOKEN_ATTENDANCE');
+    const groupId = localStorage.getItem('LINE_GROUP_ATTENDANCE');
+    return {
+      channelAccessToken: token || customChannelAuth || DEFAULT_CHANNEL_ACCESS_TOKEN,
+      groupId: groupId || DEFAULT_GROUP_ID
+    };
+  } else if (category === 'fuel') {
+    const token = localStorage.getItem('LINE_TOKEN_FUEL');
+    const groupId = localStorage.getItem('LINE_GROUP_FUEL');
+    return {
+      channelAccessToken: token || customChannelAuth || DEFAULT_CHANNEL_ACCESS_TOKEN,
+      groupId: groupId || DEFAULT_GROUP_ID
+    };
+  } else if (category === 'test') {
+    const token = localStorage.getItem('LINE_TOKEN_TEST');
+    const groupId = localStorage.getItem('LINE_GROUP_TEST');
+    return {
+      channelAccessToken: token || customChannelAuth || DEFAULT_CHANNEL_ACCESS_TOKEN,
+      groupId: groupId || DEFAULT_GROUP_ID
+    };
+  } else if (category === 'work' || category === 'operations') {
+    const token = localStorage.getItem('LINE_TOKEN_OPERATIONS') || localStorage.getItem('LINE_TOKEN_WORK');
+    const groupId = localStorage.getItem('LINE_GROUP_OPERATIONS') || localStorage.getItem('LINE_GROUP_WORK');
+    return {
+      channelAccessToken: token || customChannelAuth || DEFAULT_CHANNEL_ACCESS_TOKEN,
+      groupId: groupId || localStorage.getItem('LINE_GROUP_ID') || DEFAULT_GROUP_ID
+    };
+  } else {
+    return {
+      channelAccessToken: customChannelAuth || DEFAULT_CHANNEL_ACCESS_TOKEN,
+      groupId: DEFAULT_GROUP_ID
+    };
+  }
 }
 
 /**
- * Sends a pre-compiled Flex Message to the default LINE group
+ * Resolver that loads configs from Supabase 'line_settings' tables first,
+ * then falls back to LocalStorage or global DEFAULT constants.
  */
-export async function pushLineFlexMessage(flexMessage: any) {
+export async function getLineSettingsAsync(category: 'attendance' | 'work' | 'operations' | 'fuel' | 'test' = 'work') {
   try {
-    const { channelAccessToken, groupId } = getLineSettings();
+    const dbSettings = await getLineSettingsFromDb();
+    
+    // Map values easily by moduleName
+    const settingsMap = (dbSettings || []).reduce((acc, curr) => {
+      acc[curr.moduleName] = curr;
+      return acc;
+    }, {} as Record<string, { channelAccessToken: string; groupId: string }>);
+
+    const fallbackSetting = settingsMap['fallback'];
+    const dbFallbackToken = fallbackSetting?.channelAccessToken;
+
+    const dbCategory = category === 'work' ? 'operations' : category;
+    const currentSetting = settingsMap[dbCategory];
+    const dbToken = currentSetting?.channelAccessToken;
+    const dbGroupId = currentSetting?.groupId;
+
+    const customChannelAuth = localStorage.getItem('LINE_CHANNEL_ACCESS_TOKEN');
+    const localCategoryKey = category === 'work' ? 'OPERATIONS' : category.toUpperCase();
+    const localToken = localStorage.getItem(`LINE_TOKEN_${localCategoryKey}`) || localStorage.getItem(`LINE_TOKEN_WORK`);
+    const localGroupId = localStorage.getItem(`LINE_GROUP_${localCategoryKey}`) || localStorage.getItem(`LINE_GROUP_WORK`);
+
+    // Order of priority: 1. DB Specific, 2. LocalSpecific, 3. DB Fallback, 4. Local Fallback, 5. Hardcoded Defaults
+    const token = dbToken || localToken || dbFallbackToken || customChannelAuth || DEFAULT_CHANNEL_ACCESS_TOKEN;
+    const groupId = dbGroupId || localGroupId || DEFAULT_GROUP_ID;
+
+    return {
+      channelAccessToken: token,
+      groupId: groupId
+    };
+  } catch (error) {
+    console.warn("[LINE config] Error fetching from DB, fallback to localStorage/constants", error);
+    return getLineSettings(category);
+  }
+}
+
+/**
+ * Sends a pre-compiled Flex Message to the configured LINE group
+ */
+export async function pushLineFlexMessage(flexMessage: any, category: 'attendance' | 'work' | 'operations' | 'fuel' | 'test' = 'work') {
+  try {
+    const { channelAccessToken, groupId } = await getLineSettingsAsync(category);
     const response = await fetch('/api/line/push', {
       method: 'POST',
       headers: {
@@ -34,13 +113,13 @@ export async function pushLineFlexMessage(flexMessage: any) {
     
     const result = await response.json();
     if (!response.ok) {
-      console.error("Failed to push LINE notification:", result.error || "Unknown error");
+      console.error(`Failed to push LINE notification (${category}):`, result.error || "Unknown error");
       return { success: false, error: result.error || "Unknown error" };
     }
-    console.log("LINE push notification sent successfully");
+    console.log(`LINE push notification (${category}) sent successfully to Group: ${groupId}`);
     return { success: true };
   } catch (error: any) {
-    console.error("Error pushing LINE notification:", error);
+    console.error(`Error pushing LINE notification (${category}):`, error);
     return { success: false, error: error.message };
   }
 }
@@ -1132,7 +1211,7 @@ export async function sendLineFuelNotification(refuel: RefuelStatus, machinery: 
     }
   };
 
-  return await pushLineFlexMessage(flexJson);
+  return await pushLineFlexMessage(flexJson, 'fuel');
 }
 
 export async function sendLinePmNotification(machinery: HeavyMachinery, nextPmDueHour: number, hoursRemaining: number) {
@@ -1452,7 +1531,7 @@ export async function sendLineAttendanceNotification(attendance: AttendanceLog) 
     }
   };
 
-  return await pushLineFlexMessage(flexJson);
+  return await pushLineFlexMessage(flexJson, 'attendance');
 }
 
 export async function sendLineExpenseNotification(expense: ExpenseRecord) {
@@ -2024,6 +2103,98 @@ export async function uploadFileAndNotify(params: {
     // Return base64 as fallback so it displays
     return image;
   }
+}
+
+/**
+ * Sends a modularized sample Test Flex Message to verify Line config for a specific category
+ */
+export async function testLineNotification(category: 'attendance' | 'operations' | 'fuel' | 'test') {
+  const categoryTitle = 
+    category === 'attendance' ? '🕒 ระบบลงเวลากล้อง GPS (Attendance)' :
+    category === 'fuel' ? '⛽ ระบบเบิกเติมน้ำมันเชื้อเพลิง (Fueling)' :
+    category === 'test' ? '🧪 กลุ่มทดสอบความเข้ากันได้ทุกระบบ (Main Test Group)' :
+    '⚙️ ระบบส่งงาน & แจ้งซ่อมเครื่องจักร (Operations)';
+
+  const headingColor = 
+    category === 'attendance' ? '#6f42c1' :
+    category === 'fuel' ? '#b45309' : 
+    category === 'test' ? '#4f46e5' : '#0284c7';
+
+  const testFlex = {
+    "type": "bubble",
+    "size": "mega",
+    "header": {
+      "type": "box",
+      "layout": "vertical",
+      "backgroundColor": headingColor,
+      "paddingAll": "xl",
+      "contents": [
+        {
+          "type": "text",
+          "text": "⚡ สัญญาณทดสอบการเชื่อมต่อกลุ่ม",
+          "weight": "bold",
+          "color": "#ffffff",
+          "size": "md"
+        },
+        {
+          "type": "text",
+          "text": "ระบบแจ้งเตือนอัตโนมัติ FlowWork CMMS 360",
+          "color": "#f1f5f9",
+          "size": "xs",
+          "margin": "xs"
+        }
+      ]
+    },
+    "body": {
+      "type": "box",
+      "layout": "vertical",
+      "paddingAll": "xl",
+      "contents": [
+        {
+          "type": "box",
+          "layout": "vertical",
+          "spacing": "md",
+          "contents": [
+            {
+              "type": "text",
+              "text": "🟢 ยืนยันเชื่อมต่อสำเร็จหลัก!",
+              "weight": "bold",
+              "size": "sm",
+              "color": "#05B905"
+            },
+            {
+              "type": "text",
+              "text": `กลุ่มรับข้อมูล: ${categoryTitle}`,
+              "size": "xs",
+              "color": "#1e293b",
+              "weight": "bold"
+            },
+            {
+              "type": "text",
+              "text": "ช่องทางแชทนี้ได้รับสิทธิกระจายข่าวจากฐานข้อมูล FlowWork Cloud เรียบร้อยแล้ว พร้อมส่งมอบรายการส่งงาน ใบขอสแกน พิกัด GPS ความเที่ยงตรงสูงในลำดับถัดไป",
+              "size": "xs",
+              "color": "#64748b",
+              "wrap": true
+            },
+            {
+              "type": "separator",
+              "color": "#f1f5f9"
+            },
+            {
+              "type": "box",
+              "layout": "horizontal",
+              "contents": [
+                { "type": "text", "text": "อุปกรณ์ทดสอบ", "size": "xxs", "color": "#94a3b8" },
+                { "type": "text", "text": "FlowWork Web Console Client", "size": "xxs", "color": "#475569", "align": "end" }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  };
+
+  return await pushLineFlexMessage(testFlex, category === 'operations' ? 'work' : category);
 }
 
 

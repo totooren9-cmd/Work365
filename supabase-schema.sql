@@ -287,3 +287,21 @@ CREATE TABLE IF NOT EXISTS google_drive_uploads (
     created_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc'::text, NOW()) NOT NULL
 );
 
+-- 13. LINE Multigroup Notification Settings Table (ตารางระบบตั้งค่าไลน์แยกกลุ่มส่งสติ๊กเกอร์สแกนเวลาด่วน)
+CREATE TABLE IF NOT EXISTS line_settings (
+    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+    module_name VARCHAR(100) UNIQUE NOT NULL, -- e.g., 'attendance', 'operations', 'fuel', 'test', 'fallback'
+    channel_access_token TEXT,
+    group_id TEXT,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc'::text, NOW()) NOT NULL
+);
+
+-- Seed default settings
+INSERT INTO line_settings (module_name, channel_access_token, group_id) VALUES
+('attendance', '', ''),
+('operations', '', ''),
+('fuel', '', ''),
+('test', '', ''),
+('fallback', '', '')
+ON CONFLICT (module_name) DO NOTHING;
+

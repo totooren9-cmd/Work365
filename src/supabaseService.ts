@@ -8,7 +8,8 @@ import {
   RepairRequest, 
   RefuelStatus, 
   ExpenseRecord,
-  GoogleDriveUpload
+  GoogleDriveUpload,
+  LineSettingItem
 } from './types';
 import { toUUID } from './utils/uuid';
 
@@ -470,3 +471,31 @@ export async function saveGoogleDriveUpload(upload: GoogleDriveUpload) {
   };
   await supabase.from('google_drive_uploads').upsert(payload);
 }
+
+// 10. LINE SETTINGS MAPPINGS (ระบบดึงค่าตั้งค่าไลน์แจ้งเตือนข้ามกลุ่ม)
+export async function getLineSettingsFromDb(): Promise<LineSettingItem[]> {
+  const data = await runQuery(supabase.from('line_settings').select('*'), null);
+  if (!data) {
+    return [];
+  }
+  return data.map((r: any) => ({
+    id: r.id,
+    moduleName: r.module_name as 'attendance' | 'operations' | 'fuel' | 'fallback' | 'test',
+    channelAccessToken: r.channel_access_token || '',
+    groupId: r.group_id || '',
+    createdAt: r.created_at
+  }));
+}
+
+export async function saveLineSettingsToDb(item: LineSettingItem) {
+  const payload: any = {
+    module_name: item.moduleName,
+    channel_access_token: item.channelAccessToken,
+    group_id: item.groupId
+  };
+  if (item.id) {
+    payload.id = item.id;
+  }
+  await supabase.from('line_settings').upsert(payload, { onConflict: 'module_name' });
+}
+

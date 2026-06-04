@@ -198,3 +198,12 @@ export interface GoogleDriveUpload {
   documentNo: string;
 }
 
+export interface LineSettingItem {
+  id?: string;
+  moduleName: 'attendance' | 'operations' | 'fuel' | 'fallback' | 'test';
+  channelAccessToken: string;
+  groupId: string;
+  createdAt?: string;
+}
+
+
