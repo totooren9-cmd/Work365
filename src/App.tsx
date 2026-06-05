@@ -67,6 +67,7 @@ import {
   saveIssuance,
   getAttendances,
   saveAttendance,
+  clearAllAttendances,
   getRepairs,
   saveRepair,
   deleteRepair,
@@ -521,6 +522,12 @@ export default function App() {
     });
   };
 
+  const handleClearAllAttendance = () => {
+    setAttendances([]);
+    clearAllAttendances().catch(err => console.warn("Supabase attendance clean error:", err));
+    alert("🗑️ เคลียร์ข้อมูลพนักงานและประวัติทั้งหมดจากฐานข้อมูลเสร็จสิ้น!");
+  };
+
   const handleExportActiveTab = () => {
     switch (activeTab) {
       case 'dashboard':
@@ -921,6 +928,7 @@ export default function App() {
               attendances={attendances}
               onAddAttendance={handleAddAttendance}
               onUpdateAttendance={handleUpdateAttendance}
+              onClearAllData={handleClearAllAttendance}
             />
           )}
 

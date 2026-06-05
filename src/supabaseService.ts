@@ -258,12 +258,26 @@ export async function getAttendances(): Promise<AttendanceLog[]> {
       role: meta.role || 'ช่างควบคุมเครื่องจักร',
       checkInTime: r.check_in ? r.check_in.substring(0, 5) + ' น.' : '--:--',
       checkOutTime: r.check_out ? r.check_out.substring(0, 5) + ' น.' : undefined,
+      workDate: r.work_date || new Date().toISOString().split('T')[0],
       siteName: meta.siteName || 'ไซต์งานชลประทาน B',
+      status: r.status || meta.status || 'present',
       isOvertime: Number(r.ot_hours || 0) > 0 || !!meta.isOvertime,
+      otHours: Number(r.ot_hours || 0),
       photoUrl: meta.photoUrl || 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&q=80&w=150',
       photoUrlOut: meta.photoUrlOut || undefined,
       gpsLocIn: r.gps_coordinates || '18.7961, 98.9792',
-      gpsLocOut: meta.gpsLocOut || undefined
+      gpsLocOut: meta.gpsLocOut || undefined,
+      
+      attendanceType: meta.attendanceType || 'normal',
+      approvalStatus: meta.approvalStatus || (meta.attendanceType === 'retro' || r.status === 'wfh' ? 'pending_approval' : 'approved'),
+      approvedBy: meta.approvedBy || '',
+      reason: meta.reason || '',
+      otRequest: meta.otRequest || {
+        isRequested: Number(r.ot_hours || 0) > 0,
+        hours: Number(r.ot_hours || 0),
+        reason: meta.otReason || '',
+        status: meta.otStatus || 'approved'
+      }
     };
   });
 }
@@ -278,21 +292,33 @@ export async function saveAttendance(log: AttendanceLog) {
     siteName: log.siteName || '',
     role: log.role || '',
     gpsLocOut: log.gpsLocOut || '',
-    isOvertime: log.isOvertime || false
+    isOvertime: log.isOvertime || false,
+    
+    attendanceType: log.attendanceType || 'normal',
+    approvalStatus: log.approvalStatus || 'approved',
+    approvedBy: log.approvedBy || '',
+    reason: log.reason || '',
+    otRequest: log.otRequest || null,
+    otReason: log.otRequest?.reason || '',
+    otStatus: log.otRequest?.status || 'approved'
   };
 
   const payload = {
     id: toUUID(log.id),
     employee_name: log.employeeName,
-    check_in: checkIn.length === 5 ? checkIn + ':00' : '08:00:00',
-    check_out: checkOut && checkOut.length === 5 ? checkOut + ':00' : null,
-    work_date: new Date().toISOString().split('T')[0],
+    check_in: checkIn.length === 5 ? checkIn + ':00' : (checkIn.length === 8 ? checkIn : '08:00:00'),
+    check_out: checkOut ? (checkOut.length === 5 ? checkOut + ':00' : (checkOut.length === 8 ? checkOut : null)) : null,
+    work_date: log.workDate || new Date().toISOString().split('T')[0],
     gps_coordinates: log.gpsLocIn || '18.7961, 98.9792',
     photo_url: JSON.stringify(meta),
-    status: 'present',
-    ot_hours: log.isOvertime ? 2.0 : 0.0
+    status: log.status || 'present',
+    ot_hours: log.otRequest?.isRequested ? log.otRequest.hours : (log.isOvertime ? 2.0 : 0.0)
   };
   await supabase.from('work_attendances').upsert(payload);
+}
+
+export async function clearAllAttendances() {
+  await supabase.from('work_attendances').delete().neq('employee_name', '');
 }
 
 // 6. MECHANICAL REPAIRS MAPPINGS
@@ -474,28 +500,50 @@ export async function saveGoogleDriveUpload(upload: GoogleDriveUpload) {
 
 // 10. LINE SETTINGS MAPPINGS (ระบบดึงค่าตั้งค่าไลน์แจ้งเตือนข้ามกลุ่ม)
 export async function getLineSettingsFromDb(): Promise<LineSettingItem[]> {
-  const data = await runQuery(supabase.from('line_settings').select('*'), null);
-  if (!data) {
+  try {
+    const { data, error } = await supabase.from('line_settings').select('*');
+    if (error) {
+      if (error.code === 'PGRST205' || error.message?.includes('Could not find the table') || error.message?.includes('relation "public.line_settings" does not exist')) {
+        console.info('[Supabase Service] Table line_settings not found yet in schema cache. Using default environment configs.');
+        return [];
+      }
+      console.warn('Supabase DB Query warning (line_settings):', error);
+      return [];
+    }
+    if (!data) return [];
+    return data.map((r: any) => ({
+      id: r.id,
+      moduleName: r.module_name as 'attendance' | 'operations' | 'fuel' | 'fallback' | 'test',
+      channelAccessToken: r.channel_access_token || '',
+      groupId: r.group_id || '',
+      createdAt: r.created_at
+    }));
+  } catch (err) {
+    console.warn('[Supabase Service] Error loading line_settings, using local config fallbacks:', err);
     return [];
   }
-  return data.map((r: any) => ({
-    id: r.id,
-    moduleName: r.module_name as 'attendance' | 'operations' | 'fuel' | 'fallback' | 'test',
-    channelAccessToken: r.channel_access_token || '',
-    groupId: r.group_id || '',
-    createdAt: r.created_at
-  }));
 }
 
 export async function saveLineSettingsToDb(item: LineSettingItem) {
-  const payload: any = {
-    module_name: item.moduleName,
-    channel_access_token: item.channelAccessToken,
-    group_id: item.groupId
-  };
-  if (item.id) {
-    payload.id = item.id;
+  try {
+    const payload: any = {
+      module_name: item.moduleName,
+      channel_access_token: item.channelAccessToken,
+      group_id: item.groupId
+    };
+    if (item.id) {
+      payload.id = item.id;
+    }
+    const { error } = await supabase.from('line_settings').upsert(payload, { onConflict: 'module_name' });
+    if (error) {
+      if (error.code === 'PGRST205' || error.message?.includes('Could not find the table') || error.message?.includes('relation "public.line_settings" does not exist')) {
+        throw new Error("ตาราง 'line_settings' ยังไม่ได้ถูกสร้างในระบบฐานข้อมูล Supabase กรุณานำสคริปต์ SQL ในหน้า 'พิมพ์โครงสร้างฐานข้อมูล (SQL)' ไปรันในหน้า SQL Editor ของ Supabase เพื่อสร้างตารางก่อนทำการบันทึก");
+      }
+      throw error;
+    }
+  } catch (err: any) {
+    console.error("saveLineSettingsToDb error:", err);
+    throw err;
   }
-  await supabase.from('line_settings').upsert(payload, { onConflict: 'module_name' });
 }
 

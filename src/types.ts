@@ -102,12 +102,30 @@ export interface AttendanceLog {
   role: string;
   checkInTime: string;
   checkOutTime?: string;
+  workDate?: string; // YYYY-MM-DD
   siteName: string;
-  isOvertime: boolean;
-  photoUrl: string;
-  photoUrlOut?: string;
+  status?: string; // 'present' | 'absent' | 'leave' | 'late' | 'wfh'
   gpsLocIn: string;
   gpsLocOut?: string;
+  photoUrl: string;
+  photoUrlOut?: string;
+  isOvertime: boolean;
+  otHours?: number;
+  
+  // Enhanced attributes for Work-From-Home (WFH), retro-adjustments, and approvals
+  attendanceType?: 'normal' | 'retro';
+  approvalStatus?: 'pending_approval' | 'approved' | 'rejected';
+  approvedBy?: string;
+  reason?: string;
+  
+  // Enhanced attributes for OT Requests
+  otRequest?: {
+    isRequested: boolean;
+    hours: number;
+    reason: string;
+    status: 'pending' | 'approved' | 'rejected';
+    approvedBy?: string;
+  };
 }
 
 export interface RepairRequest {

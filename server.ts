@@ -150,8 +150,30 @@ async function uploadToGoogleDrive(
   }
 }
 
-const LINE_CHANNEL_ACCESS_TOKEN = process.env.LINE_CHANNEL_ACCESS_TOKEN || "emexPY8OBr3kHbSKKDRNh9W33tnL9dHqLxtD3Zqwx6fYBpy7UMv6BqU65FAJ8L1VhXdmqb7nE9H/AmyijvpPnNlcFgob0ET7ysPGosTEO33GgL6ccIn60mxibiOrEZ47yVH+EkKWcsTOX+RUhI7U6gdB04t89/1O/w1cDnyilFU=";
-const LINE_GROUP_ID = process.env.LINE_GROUP_ID || "Cfd9f3c46111cf32db3e3e69b6961fa3e";
+// Helper to check if a token is a known expired/invalid token
+function isStaleLineToken(token: string | undefined): boolean {
+  if (!token) return true;
+  const t = token.trim();
+  return t === "" || t.includes("v5oSkyDH") || t.includes("LOsEWhXv");
+}
+
+// Helper to check if a group ID is a known expired/invalid group ID
+function isStaleLineGroupId(groupId: string | undefined): boolean {
+  if (!groupId) return true;
+  const g = groupId.trim();
+  return g === "" || g.includes("C94ac0eec7f7dc7b97fd2767104d1e7a0") || g === "C94ac0eec7f7dc7b97fd2767104d1e7a0";
+}
+
+const rawEnvToken = process.env.LINE_CHANNEL_ACCESS_TOKEN;
+const rawEnvGroupId = process.env.LINE_GROUP_ID;
+
+const LINE_CHANNEL_ACCESS_TOKEN = isStaleLineToken(rawEnvToken)
+  ? "emexPY8OBr3kHbSKKDRNh9W33tnL9dHqLxtD3Zqwx6fYBpy7UMv6BqU65FAJ8L1VhXdmqb7nE9H/AmyijvpPnNlcFgob0ET7ysPGosTEO33GgL6ccIn60mxibiOrEZ47yVH+EkKWcsTOX+RUhI7U6gdB04t89/1O/w1cDnyilFU="
+  : rawEnvToken!.trim();
+
+const LINE_GROUP_ID = isStaleLineGroupId(rawEnvGroupId)
+  ? "Cfd9f3c46111cf32db3e3e69b6961fa3e"
+  : rawEnvGroupId!.trim();
 
 async function startServer() {
   const app = express();
@@ -244,6 +266,16 @@ async function startServer() {
 
       console.log(`[LINE Service] Initiating push. Token prefix: ${activeToken.slice(0, 8)}...${activeToken.slice(-8)} (Len: ${activeToken.length}), Group ID: ${activeGroupId}`);
 
+      // Auto-wrap flexMessage if it is not already wrapped in a "type": "flex" structure
+      let finalMessage = flexMessage;
+      if (flexMessage && flexMessage.type !== "flex") {
+        finalMessage = {
+          type: "flex",
+          altText: flexMessage.altText || "📢 แจ้งเตือนจาก FlowWork",
+          contents: flexMessage
+        };
+      }
+
       const response = await fetch("https://api.line.me/v2/bot/message/push", {
         method: "POST",
         headers: {
@@ -252,7 +284,7 @@ async function startServer() {
         },
         body: JSON.stringify({
           to: activeGroupId,
-          messages: [flexMessage],
+          messages: [finalMessage],
         }),
       });
 

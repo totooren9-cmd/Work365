@@ -5,7 +5,56 @@ import { saveGoogleDriveUpload, getLineSettingsFromDb } from '../supabaseService
 const DEFAULT_CHANNEL_ACCESS_TOKEN = "emexPY8OBr3kHbSKKDRNh9W33tnL9dHqLxtD3Zqwx6fYBpy7UMv6BqU65FAJ8L1VhXdmqb7nE9H/AmyijvpPnNlcFgob0ET7ysPGosTEO33GgL6ccIn60mxibiOrEZ47yVH+EkKWcsTOX+RUhI7U6gdB04t89/1O/w1cDnyilFU=";
 const DEFAULT_GROUP_ID = "Cfd9f3c46111cf32db3e3e69b6961fa3e";
 
+function isStaleLineToken(token: string | null | undefined): boolean {
+  if (!token) return true;
+  const t = token.trim();
+  return t === "" || t.includes("v5oSkyDH") || t.includes("LOsEWhXv");
+}
+
+function isStaleLineGroupId(groupId: string | null | undefined): boolean {
+  if (!groupId) return true;
+  const g = groupId.trim();
+  return g === "" || g.includes("C94ac0eec7f7dc7b97fd2767104d1e7a0") || g === "C94ac0eec7f7dc7b97fd2767104d1e7a0";
+}
+
+export function sanitizeLocalStorageTokens() {
+  if (typeof window === 'undefined') return;
+  const keys = [
+    'LINE_TOKEN_ATTENDANCE',
+    'LINE_TOKEN_WORK',
+    'LINE_TOKEN_OPERATIONS',
+    'LINE_TOKEN_FUEL',
+    'LINE_TOKEN_TEST',
+    'LINE_CHANNEL_ACCESS_TOKEN'
+  ];
+  keys.forEach(key => {
+    const val = localStorage.getItem(key);
+    if (val && isStaleLineToken(val)) {
+      console.log(`[LINE Token Sanitize] Removing expired/stale default token from localStorage key: ${key}`);
+      localStorage.removeItem(key);
+    }
+  });
+
+  const groupKeys = [
+    'LINE_GROUP_ATTENDANCE',
+    'LINE_GROUP_WORK',
+    'LINE_GROUP_OPERATIONS',
+    'LINE_GROUP_FUEL',
+    'LINE_GROUP_TEST',
+    'LINE_GROUP_ID'
+  ];
+  groupKeys.forEach(key => {
+    const val = localStorage.getItem(key);
+    if (val && isStaleLineGroupId(val)) {
+      console.log(`[LINE Group Sanitize] Removing expired/stale default group ID from localStorage key: ${key}`);
+      localStorage.removeItem(key);
+    }
+  });
+}
+
 export function getLineSettings(category: 'attendance' | 'work' | 'operations' | 'fuel' | 'test' = 'work') {
+  sanitizeLocalStorageTokens();
+
   if (typeof window === 'undefined') {
     return {
       channelAccessToken: DEFAULT_CHANNEL_ACCESS_TOKEN,
@@ -14,32 +63,45 @@ export function getLineSettings(category: 'attendance' | 'work' | 'operations' |
   }
 
   // Fallback shared token
-  const customChannelAuth = localStorage.getItem('LINE_CHANNEL_ACCESS_TOKEN');
+  let customChannelAuth = localStorage.getItem('LINE_CHANNEL_ACCESS_TOKEN');
+  if (isStaleLineToken(customChannelAuth)) customChannelAuth = null;
 
   if (category === 'attendance') {
-    const token = localStorage.getItem('LINE_TOKEN_ATTENDANCE');
-    const groupId = localStorage.getItem('LINE_GROUP_ATTENDANCE');
+    let token = localStorage.getItem('LINE_TOKEN_ATTENDANCE');
+    if (isStaleLineToken(token)) token = null;
+    let groupId = localStorage.getItem('LINE_GROUP_ATTENDANCE');
+    if (isStaleLineGroupId(groupId)) groupId = null;
+    
     return {
       channelAccessToken: token || customChannelAuth || DEFAULT_CHANNEL_ACCESS_TOKEN,
       groupId: groupId || DEFAULT_GROUP_ID
     };
   } else if (category === 'fuel') {
-    const token = localStorage.getItem('LINE_TOKEN_FUEL');
-    const groupId = localStorage.getItem('LINE_GROUP_FUEL');
+    let token = localStorage.getItem('LINE_TOKEN_FUEL');
+    if (isStaleLineToken(token)) token = null;
+    let groupId = localStorage.getItem('LINE_GROUP_FUEL');
+    if (isStaleLineGroupId(groupId)) groupId = null;
+
     return {
       channelAccessToken: token || customChannelAuth || DEFAULT_CHANNEL_ACCESS_TOKEN,
       groupId: groupId || DEFAULT_GROUP_ID
     };
   } else if (category === 'test') {
-    const token = localStorage.getItem('LINE_TOKEN_TEST');
-    const groupId = localStorage.getItem('LINE_GROUP_TEST');
+    let token = localStorage.getItem('LINE_TOKEN_TEST');
+    if (isStaleLineToken(token)) token = null;
+    let groupId = localStorage.getItem('LINE_GROUP_TEST');
+    if (isStaleLineGroupId(groupId)) groupId = null;
+
     return {
       channelAccessToken: token || customChannelAuth || DEFAULT_CHANNEL_ACCESS_TOKEN,
       groupId: groupId || DEFAULT_GROUP_ID
     };
   } else if (category === 'work' || category === 'operations') {
-    const token = localStorage.getItem('LINE_TOKEN_OPERATIONS') || localStorage.getItem('LINE_TOKEN_WORK');
-    const groupId = localStorage.getItem('LINE_GROUP_OPERATIONS') || localStorage.getItem('LINE_GROUP_WORK');
+    let token = localStorage.getItem('LINE_TOKEN_OPERATIONS') || localStorage.getItem('LINE_TOKEN_WORK');
+    if (isStaleLineToken(token)) token = null;
+    let groupId = localStorage.getItem('LINE_GROUP_OPERATIONS') || localStorage.getItem('LINE_GROUP_WORK');
+    if (isStaleLineGroupId(groupId)) groupId = null;
+
     return {
       channelAccessToken: token || customChannelAuth || DEFAULT_CHANNEL_ACCESS_TOKEN,
       groupId: groupId || localStorage.getItem('LINE_GROUP_ID') || DEFAULT_GROUP_ID
@@ -57,6 +119,8 @@ export function getLineSettings(category: 'attendance' | 'work' | 'operations' |
  * then falls back to LocalStorage or global DEFAULT constants.
  */
 export async function getLineSettingsAsync(category: 'attendance' | 'work' | 'operations' | 'fuel' | 'test' = 'work') {
+  sanitizeLocalStorageTokens();
+
   try {
     const dbSettings = await getLineSettingsFromDb();
     
@@ -67,17 +131,24 @@ export async function getLineSettingsAsync(category: 'attendance' | 'work' | 'op
     }, {} as Record<string, { channelAccessToken: string; groupId: string }>);
 
     const fallbackSetting = settingsMap['fallback'];
-    const dbFallbackToken = fallbackSetting?.channelAccessToken;
+    let dbFallbackToken = fallbackSetting?.channelAccessToken;
+    if (isStaleLineToken(dbFallbackToken)) dbFallbackToken = undefined;
 
     const dbCategory = category === 'work' ? 'operations' : category;
     const currentSetting = settingsMap[dbCategory];
-    const dbToken = currentSetting?.channelAccessToken;
-    const dbGroupId = currentSetting?.groupId;
+    let dbToken = currentSetting?.channelAccessToken;
+    if (isStaleLineToken(dbToken)) dbToken = undefined;
+    let dbGroupId = currentSetting?.groupId;
+    if (isStaleLineGroupId(dbGroupId)) dbGroupId = undefined;
 
-    const customChannelAuth = localStorage.getItem('LINE_CHANNEL_ACCESS_TOKEN');
+    let customChannelAuth = localStorage.getItem('LINE_CHANNEL_ACCESS_TOKEN');
+    if (isStaleLineToken(customChannelAuth)) customChannelAuth = null;
+
     const localCategoryKey = category === 'work' ? 'OPERATIONS' : category.toUpperCase();
-    const localToken = localStorage.getItem(`LINE_TOKEN_${localCategoryKey}`) || localStorage.getItem(`LINE_TOKEN_WORK`);
-    const localGroupId = localStorage.getItem(`LINE_GROUP_${localCategoryKey}`) || localStorage.getItem(`LINE_GROUP_WORK`);
+    let localToken = localStorage.getItem(`LINE_TOKEN_${localCategoryKey}`) || localStorage.getItem(`LINE_TOKEN_WORK`);
+    if (isStaleLineToken(localToken)) localToken = null;
+    let localGroupId = localStorage.getItem(`LINE_GROUP_${localCategoryKey}`) || localStorage.getItem(`LINE_GROUP_WORK`);
+    if (isStaleLineGroupId(localGroupId)) localGroupId = null;
 
     // Order of priority: 1. DB Specific, 2. LocalSpecific, 3. DB Fallback, 4. Local Fallback, 5. Hardcoded Defaults
     const token = dbToken || localToken || dbFallbackToken || customChannelAuth || DEFAULT_CHANNEL_ACCESS_TOKEN;
@@ -99,13 +170,24 @@ export async function getLineSettingsAsync(category: 'attendance' | 'work' | 'op
 export async function pushLineFlexMessage(flexMessage: any, category: 'attendance' | 'work' | 'operations' | 'fuel' | 'test' = 'work') {
   try {
     const { channelAccessToken, groupId } = await getLineSettingsAsync(category);
+    
+    // Auto-wrap flexMessage if it is not already wrapped in a "type": "flex" structure
+    let finalMessage = flexMessage;
+    if (flexMessage && flexMessage.type !== 'flex') {
+      finalMessage = {
+        "type": "flex",
+        "altText": flexMessage.altText || "📢 แจ้งเตือนจาก FlowWork",
+        "contents": flexMessage
+      };
+    }
+
     const response = await fetch('/api/line/push', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json'
       },
       body: JSON.stringify({
-        flexMessage,
+        flexMessage: finalMessage,
         channelAccessToken,
         groupId
       })
@@ -146,6 +228,24 @@ export function ensureValidImageUrl(url: string | null | undefined): string {
     return absoluteUrl;
   }
   return ""; // Not a valid URL schema for LINE API
+}
+
+/**
+ * Parses coordinates from a GPS string. Supports forms like "18.7904, 98.9841" or "18.7904, 98.9841 (Label)".
+ */
+export function parseCoordinates(gpsStr: string | null | undefined): { lat: number; lon: number } | null {
+  if (!gpsStr) return null;
+  const matches = gpsStr.match(/(-?\d+\.\d+)\s*,\s*(-?\d+\.\d+)/);
+  if (matches && matches.length >= 3) {
+    const lat = parseFloat(matches[1]);
+    const lon = parseFloat(matches[2]);
+    if (!isNaN(lat) && !isNaN(lon)) {
+      if (lat >= -90 && lat <= 90 && lon >= -180 && lon <= 180) {
+        return { lat, lon };
+      }
+    }
+  }
+  return null;
 }
 
 /**
@@ -1387,6 +1487,9 @@ export async function sendLineAttendanceNotification(attendance: AttendanceLog) 
   const verifiedPhotoUrl = ensureValidImageUrl(targetPhoto);
   const hasValidPhotoUrl = !!verifiedPhotoUrl;
 
+  const gpsString = isCheckOut ? (attendance.gpsLocOut || '') : (attendance.gpsLocIn || '');
+  const coords = parseCoordinates(gpsString);
+
   const flexJson = {
     "type": "flex",
     "altText": `⏱️ ${attendance.employeeName} ${isCheckOut ? 'ลงเวลาออกงาน' : 'ลงเวลาเข้างาน'}`,
@@ -1546,11 +1649,98 @@ export async function sendLineAttendanceNotification(attendance: AttendanceLog) 
                 "margin": "sm",
                 "contents": [
                   { "type": "text", "text": "การทำงานล่วงเวลา (OT)", "color": "#64748b", "size": "xs", "flex": 4 },
-                  { "type": "text", "text": attendance.isOvertime ? "อนุมัติค่าล่วงเวลา (มี OT) 💰" : "ชั่วโมงงานปกติ", "color": attendance.isOvertime ? "#eab308" : "#64748b", "size": "xs", "flex": 5, "weight": "bold", "wrap": true }
+                  { "type": "text", "text": attendance.isOvertime ? `อนุมัติค่าล่วงเวลา (มี OT ${attendance.otHours ? `${attendance.otHours} ชม.` : ''}) 💰` : "ชั่วโมงงานปกติ", "color": attendance.isOvertime ? "#eab308" : "#64748b", "size": "xs", "flex": 5, "weight": "bold", "wrap": true }
                 ]
-              }
+              },
+              {
+                "type": "box",
+                "layout": "baseline",
+                "spacing": "sm",
+                "margin": "sm",
+                "contents": [
+                  { "type": "text", "text": "ประเภทการทำงาน", "color": "#64748b", "size": "xs", "flex": 4 },
+                  { 
+                    "type": "text", 
+                    "text": attendance.status === 'wfh' 
+                      ? "🏠 ทำงานที่บ้าน (WFH)" 
+                      : (attendance.attendanceType === 'retro' ? "📅 ลงเวลาย้อนหลัง (Retro)" : "🏢 ปฏิบัติงานหน้าร้าน/ไซต์งานปกติ"), 
+                    "color": attendance.status === 'wfh' ? "#0ea5e9" : (attendance.attendanceType === 'retro' ? "#a855f7" : "#334155"), 
+                    "size": "xs", 
+                    "flex": 5, 
+                    "weight": "bold", 
+                    "wrap": true 
+                  }
+                ]
+              },
+              {
+                "type": "box",
+                "layout": "baseline",
+                "spacing": "sm",
+                "margin": "sm",
+                "contents": [
+                  { "type": "text", "text": "พิจารณาคำขอ", "color": "#64748b", "size": "xs", "flex": 4 },
+                  { 
+                    "type": "text", 
+                    "text": attendance.approvalStatus === 'approved' 
+                      ? `✅ อนุมัติผ่าน (โดย บก. ${attendance.approvedBy || 'หัวหน้างาน'})` 
+                      : (attendance.approvalStatus === 'rejected' ? `❌ ปฏิเสธเเล้ว (โดย บก. ${attendance.approvedBy || 'หัวหน้างาน'})` : `⏳ รอตรวจอนุมัติแบบดิจิทัล`), 
+                    "color": attendance.approvalStatus === 'approved' ? "#10b981" : (attendance.approvalStatus === 'rejected' ? "#ef4444" : "#f59e0b"), 
+                    "size": "xs", 
+                    "flex": 5, 
+                    "weight": "bold", 
+                    "wrap": true 
+                  }
+                ]
+              },
+              ...(attendance.otRequest?.isRequested ? [
+                {
+                  "type": "box",
+                  "layout": "baseline",
+                  "spacing": "sm",
+                  "margin": "sm",
+                  "contents": [
+                    { "type": "text", "text": "ชั่วโมง OT ที่เรียกขอ", "color": "#64748b", "size": "xs", "flex": 4 },
+                    { "type": "text", "text": `${attendance.otRequest.hours} ชั่วโมง (${attendance.otRequest.status === 'approved' ? '✅ ผ่าน' : attendance.otRequest.status === 'rejected' ? '❌ ไม่อนุมัติ' : '⏳ รอพิจารณา'})`, "color": "#d97706", "size": "xs", "flex": 5, "weight": "bold", "wrap": true }
+                  ]
+                }
+              ] : [])
             ]
-          }
+          },
+          ...(coords ? [
+            {
+              "type": "separator",
+              "margin": "lg",
+              "color": "#e2e8f0"
+            },
+            {
+              "type": "text",
+              "text": "📍 พิกัดปฏิบัติงานจริง (GPS Pinpoint)",
+              "weight": "bold",
+              "size": "xs",
+              "color": "#16a34a",
+              "margin": "md"
+            },
+            {
+              "type": "button",
+              "style": "primary",
+              "color": "#16a34a",
+              "height": "sm",
+              "margin": "sm",
+              "action": {
+                "type": "uri",
+                "label": "🗺️ เปิดแผนที่นำทาง Google Maps",
+                "uri": `https://www.google.com/maps/search/?api=1&query=${coords.lat},${coords.lon}`
+              }
+            },
+            {
+              "type": "text",
+              "text": "👆 แตะปุ่มเพื่อนำทางไปยังจุดพิกัดผ่าน Google Maps ทันที",
+              "size": "xxs",
+              "color": "#64748b",
+              "align": "center",
+              "margin": "xs"
+            }
+          ] : [])
         ]
       }
     }
@@ -1836,6 +2026,48 @@ export async function sendLineJobSubmissionNotification(
       "aspectRatio": "16:11",
       "aspectMode": "cover"
     };
+  }
+
+  const jobCoords = parseCoordinates(gps);
+  if (jobCoords) {
+    if (!bubble.body.contents) {
+      bubble.body.contents = [];
+    }
+    bubble.body.contents.push(
+      {
+        "type": "separator",
+        "margin": "lg",
+        "color": "#e2e8f0"
+      },
+      {
+        "type": "text",
+        "text": "📍 พิกัดปฏิบัติงานจริง (GPS Pinpoint)",
+        "weight": "bold",
+        "size": "xs",
+        "color": "#10b981",
+        "margin": "md"
+      },
+      {
+        "type": "button",
+        "style": "primary",
+        "color": "#10b981",
+        "height": "sm",
+        "margin": "sm",
+        "action": {
+          "type": "uri",
+          "label": "🗺️ เปิดแผนที่นำทาง Google Maps",
+          "uri": `https://www.google.com/maps/search/?api=1&query=${jobCoords.lat},${jobCoords.lon}`
+        }
+      },
+      {
+        "type": "text",
+        "text": "👆 แตะปุ่มเพื่อนำทางไปยังจุดพิกัดผ่าน Google Maps ทันที",
+        "size": "xxs",
+        "color": "#64748b",
+        "align": "center",
+        "margin": "xs"
+      }
+    );
   }
 
   const flexJson = {
