@@ -1277,7 +1277,7 @@ export default function ReportsCenterView({
               <div className="flex items-center gap-2">
                 <span className="w-1.5 h-3 bg-amber-500 rounded-full"></span>
                 <h3 className="text-xs font-black text-stone-750 uppercase tracking-widest">
-                  ตารางรายงานจำลองเจาะลึกดิบ ({activeReportTableData.length} แถว)
+                  ตารางรายงานเจาะลึกดิบ ({activeReportTableData.length} แถว)
                 </h3>
               </div>
 

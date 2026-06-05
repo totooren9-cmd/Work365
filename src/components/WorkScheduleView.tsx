@@ -1106,7 +1106,7 @@ export default function WorkScheduleView({
                   <div className="space-y-3">
                     <div className="bg-stone-50/60 p-3 rounded-t-xl flex flex-col sm:flex-row gap-2 items-center justify-between text-xs font-bold text-stone-700 border border-slate-500/10">
                       <div>
-                        📅 แผนงานจำลองรายสัปดาห์ ({new Date(weekDays[0].dateStr).toLocaleDateString('th-TH', { day: 'numeric', month: 'short' })} - {new Date(weekDays[6].dateStr).toLocaleDateString('th-TH', { day: 'numeric', month: 'short', year: 'numeric' })})
+                        📅 แผนงานหลักรายสัปดาห์ ({new Date(weekDays[0].dateStr).toLocaleDateString('th-TH', { day: 'numeric', month: 'short' })} - {new Date(weekDays[6].dateStr).toLocaleDateString('th-TH', { day: 'numeric', month: 'short', year: 'numeric' })})
                       </div>
                       <div className="flex gap-1.5">
                         <button

@@ -2,8 +2,8 @@ import { WorkScheduleTask, RepairRequest, HeavyMachinery, InventoryIssuance, Sto
 import { saveGoogleDriveUpload, getLineSettingsFromDb } from '../supabaseService';
 
 
-const DEFAULT_CHANNEL_ACCESS_TOKEN = "LOsEWhXvFup41WFZWMyMZtUwqGFWws583/YbGvEGtADMlAEfw1kJoc61miQlxR155ayovX2w+wQnWAAUGqKInRMkg43XgFvxcXoo8QkbPbDOso+a0PpwwBQDFUjQYF9LIuiemAo9f/iqKRxsJh6UXgdB04t89/1O/w1cDnyilFU=";
-const DEFAULT_GROUP_ID = "C94ac0eec7f7dc7b97fd2767104d1e7a0";
+const DEFAULT_CHANNEL_ACCESS_TOKEN = "emexPY8OBr3kHbSKKDRNh9W33tnL9dHqLxtD3Zqwx6fYBpy7UMv6BqU65FAJ8L1VhXdmqb7nE9H/AmyijvpPnNlcFgob0ET7ysPGosTEO33GgL6ccIn60mxibiOrEZ47yVH+EkKWcsTOX+RUhI7U6gdB04t89/1O/w1cDnyilFU=";
+const DEFAULT_GROUP_ID = "Cfd9f3c46111cf32db3e3e69b6961fa3e";
 
 export function getLineSettings(category: 'attendance' | 'work' | 'operations' | 'fuel' | 'test' = 'work') {
   if (typeof window === 'undefined') {
@@ -122,6 +122,30 @@ export async function pushLineFlexMessage(flexMessage: any, category: 'attendanc
     console.error(`Error pushing LINE notification (${category}):`, error);
     return { success: false, error: error.message };
   }
+}
+
+/**
+ * Ensures a photo URL is formatted as an absolute HTTPS/HTTP link.
+ * If the link is relative, it prepends the application origin.
+ * If the link starts with data: or is invalid/missing, it returns empty string to skip sending.
+ */
+export function ensureValidImageUrl(url: string | null | undefined): string {
+  if (!url) return "";
+  let absoluteUrl = url.trim();
+  if (absoluteUrl.startsWith('data:')) {
+    return ""; // Base64 data URLs are invalid for LINE Flex
+  }
+  if (absoluteUrl.startsWith('/')) {
+    const appUrl = (typeof window !== 'undefined' && window.location) 
+      ? window.location.origin 
+      : (process.env.APP_URL || "https://ais-dev-v4xmqfyvpohkbt7yv5i5b4-778841450865.asia-southeast1.run.app");
+    const origin = appUrl.endsWith('/') ? appUrl.slice(0, -1) : appUrl;
+    absoluteUrl = `${origin}${absoluteUrl}`;
+  }
+  if (absoluteUrl.startsWith('http://') || absoluteUrl.startsWith('https://')) {
+    return absoluteUrl;
+  }
+  return ""; // Not a valid URL schema for LINE API
 }
 
 /**
@@ -1360,7 +1384,8 @@ export async function sendLineAttendanceNotification(attendance: AttendanceLog) 
   const timeLabel = isCheckOut ? `เวลาออกงาน: ${attendance.checkOutTime}` : `เวลาเข้างาน: ${attendance.checkInTime}`;
 
   const targetPhoto = isCheckOut ? (attendance.photoUrlOut || attendance.photoUrl) : attendance.photoUrl;
-  const hasValidPhotoUrl = targetPhoto && !targetPhoto.startsWith('data:');
+  const verifiedPhotoUrl = ensureValidImageUrl(targetPhoto);
+  const hasValidPhotoUrl = !!verifiedPhotoUrl;
 
   const flexJson = {
     "type": "flex",
@@ -1400,7 +1425,7 @@ export async function sendLineAttendanceNotification(attendance: AttendanceLog) 
           ...(hasValidPhotoUrl ? [
             {
               "type": "image",
-              "url": targetPhoto,
+              "url": verifiedPhotoUrl,
               "size": "full",
               "aspectRatio": "1.51:1",
               "aspectMode": "cover",
@@ -1546,6 +1571,8 @@ export async function sendLineExpenseNotification(expense: ExpenseRecord) {
     expense.category === 'transport' ? '🚚 ค่าขนส่ง/โลจิสติกส์ (Transport)' :
     expense.category === 'rent' ? '🏢 ค่าเช่าเครื่องจักร/สถานที่ (Rent)' : '📦 รายจ่ายอื่น ๆ (Other)';
 
+  const validatedReceiptPhoto = ensureValidImageUrl(expense.receiptPhoto);
+
   const flexJson = {
     "type": "flex",
     "altText": `💰 บันทึกรายจ่ายใหม่: [${expense.category.toUpperCase()}] ${expense.amount.toLocaleString()} บาท`,
@@ -1579,10 +1606,10 @@ export async function sendLineExpenseNotification(expense: ExpenseRecord) {
         "layout": "vertical",
         "paddingAll": "xl",
         "contents": [
-          ...(expense.receiptPhoto ? [
+          ...(validatedReceiptPhoto ? [
             {
               "type": "image",
-              "url": expense.receiptPhoto,
+              "url": validatedReceiptPhoto,
               "size": "full",
               "aspectRatio": "1.51:1",
               "aspectMode": "cover",
@@ -1800,10 +1827,11 @@ export async function sendLineJobSubmissionNotification(
     }
   };
 
-  if (photoUrl) {
+  const verifiedPhoto = ensureValidImageUrl(photoUrl);
+  if (verifiedPhoto) {
     bubble.hero = {
       "type": "image",
-      "url": photoUrl,
+      "url": verifiedPhoto,
       "size": "full",
       "aspectRatio": "16:11",
       "aspectMode": "cover"
@@ -1829,8 +1857,9 @@ export async function sendGoogleDriveLineNotification(params: {
   timestamp: string;
   status: string;
   imageUrl?: string;
+  category?: 'attendance' | 'work' | 'operations' | 'fuel' | 'test';
 }) {
-  const { docId, jobType, operator, timestamp, status, imageUrl } = params;
+  const { docId, jobType, operator, timestamp, status, imageUrl, category: paramCategory } = params;
   
   const displayId = docId || "JOB-MOCK-ID";
   const appUrl = (typeof window !== 'undefined' && window.location) 
@@ -2013,7 +2042,26 @@ export async function sendGoogleDriveLineNotification(params: {
     }
   };
 
-  return await pushLineFlexMessage(flexJson);
+  const lowerJob = String(jobType || "").toLowerCase().trim();
+  let category: 'attendance' | 'work' | 'operations' | 'fuel' | 'test' = paramCategory || 'work';
+  if (!paramCategory) {
+    if (
+      lowerJob.includes("checkin") || 
+      lowerJob.includes("checkout") || 
+      lowerJob.includes("check in") || 
+      lowerJob.includes("check out") || 
+      lowerJob.includes("attendance") || 
+      lowerJob.includes("ลงเวลา")
+    ) {
+      category = 'attendance';
+    } else if (lowerJob.includes("fuel") || lowerJob.includes("น้ำมัน") || lowerJob.includes("refuel")) {
+      category = 'fuel';
+    } else if (lowerJob.includes("test") || lowerJob.includes("ทดสอบ")) {
+      category = 'test';
+    }
+  }
+
+  return await pushLineFlexMessage(flexJson, category);
 }
 
 /**

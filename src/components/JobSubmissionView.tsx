@@ -588,6 +588,98 @@ export default function JobSubmissionView({ tasks, onTaskUpdated, theme }: JobSu
           </div>
         </div>
       </div>
+
+      {/* Table of All Tasks / Submissions */}
+      <div className="mt-8 bg-white p-6 rounded-3xl border border-stone-200/50 shadow-sm" id="all-job-records-table">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-4 border-b border-stone-100 pb-4">
+          <div>
+            <h2 className="text-md font-bold text-stone-800 font-sans tracking-tight">ตารางรายการปฏิบัติงานทั้งหมด</h2>
+            <p className="text-xs text-stone-500 mt-1 font-sans">
+              ตารางรวมรายการแผนงานและรายงานส่งมอบภารกิจทั้งหมดจากระบบฐานข้อมูล Supabase 360
+            </p>
+          </div>
+          <span className="bg-stone-50 text-stone-600 text-xs font-mono px-3 py-1 rounded-xl border border-stone-200/60 font-bold shrink-0">
+            ทั้งหมด {tasks.length} รายการ
+          </span>
+        </div>
+
+        {tasks.length === 0 ? (
+          <div className="text-center py-12 text-stone-400 text-xs bg-stone-50 rounded-2xl border border-dashed border-stone-200">
+             ไม่มีรายการภารกิจในระบบฐานข้อมูล
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-xs text-stone-600 border-collapse">
+              <thead>
+                <tr className="border-b border-stone-200/60 text-stone-400 font-extrabold uppercase tracking-wider text-[10px]">
+                  <th className="py-3 px-3">เลขที่</th>
+                  <th className="py-3 px-3">ชื่องานปฏิบัติการ</th>
+                  <th className="py-3 px-3 mr-auto">ช่างผู้สําเร็จ/ดูแล</th>
+                  <th className="py-3 px-3">ความสำคัญ</th>
+                  <th className="py-3 px-3 shrink-0">กำหนดเสร็จ</th>
+                  <th className="py-3 px-3 text-right">สถานะ</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-stone-100">
+                {tasks.map((t) => (
+                  <tr 
+                    key={t.id} 
+                    className="hover:bg-stone-50/80 transition-colors cursor-pointer"
+                    onClick={() => {
+                      setSelectedTaskId(t.id);
+                      setWorkerName(t.assignedTo || '');
+                    }}
+                  >
+                    <td className="py-3.5 px-3 font-mono text-stone-500 select-all shrink-0">
+                      {t.id.substring(0, 8)}
+                    </td>
+                    <td className="py-3.5 px-3 font-bold text-stone-800">
+                      <div>
+                        {t.title}
+                        {t.description && (
+                          <span className="block text-[10.5px] text-stone-400 font-normal mt-0.5 max-w-xs truncate">{t.description}</span>
+                        )}
+                      </div>
+                    </td>
+                    <td className="py-3.5 px-3 font-semibold text-stone-700">
+                      {t.assignedTo || 'ไม่ได้ระบุ'}
+                    </td>
+                    <td className="py-3.5 px-3">
+                      <span className={`px-2 py-0.5 rounded font-extrabold text-[9.5px] uppercase ${
+                        t.priority === 'critical' ? 'bg-red-50 text-red-600 border border-red-150/50' :
+                        t.priority === 'high' ? 'bg-orange-50 text-orange-600 border border-orange-150/50' :
+                        t.priority === 'medium' ? 'bg-blue-50 text-blue-600 border border-blue-150/50' :
+                        'bg-stone-50 text-stone-600 border border-stone-150/50'
+                      }`}>
+                        {t.priority === 'critical' ? 'วิกฤต' :
+                         t.priority === 'high' ? 'สูง' :
+                         t.priority === 'medium' ? 'ปานกลาง' : 'ต่ำ'}
+                      </span>
+                    </td>
+                    <td className="py-3.5 px-3 font-mono text-stone-500 shrink-0">
+                      {t.dueDate || 'ไม่ระบุ'}
+                    </td>
+                    <td className="py-3.5 px-3 text-right">
+                      <span className={`px-2 py-0.5 rounded-full font-extrabold text-[9.5px] ${
+                        t.status === 'completed' ? 'bg-emerald-50 text-emerald-600 border border-emerald-100' :
+                        t.status === 'in_progress' ? 'bg-blue-50 text-blue-600 border border-blue-105' :
+                        t.status === 'awaiting_approval' ? 'bg-indigo-50 text-indigo-600 border border-indigo-105' :
+                        t.status === 'cancelled' ? 'bg-stone-100 text-stone-505 border border-stone-150' :
+                        'bg-amber-50 text-amber-600 border border-amber-105'
+                      }`}>
+                        {t.status === 'completed' ? 'เสร็จเรียบร้อย' :
+                         t.status === 'in_progress' ? 'กำลังปฏิบัติงาน' :
+                         t.status === 'awaiting_approval' ? 'รออนุมัติปิดงาน' :
+                         t.status === 'cancelled' ? 'ยกเลิกภารกิจ' : 'รอดำเนินการ'}
+                      </span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
     </div>
   );
 }

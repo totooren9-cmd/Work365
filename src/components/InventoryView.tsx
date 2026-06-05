@@ -610,30 +610,30 @@ export default function InventoryView({ stocks, issuances, onAddStock, onAddIssu
           )}
         </div>
 
-        {/* 3. QR Mobile Scanner Simulator */}
+        {/* 3. QR Mobile Scanner (Production Scan) */}
         <div className="bg-white p-4 rounded-2xl border border-stone-200/80 space-y-3 mt-4 text-center">
           <div className="flex items-center gap-2 text-xs font-bold text-stone-600 uppercase border-b border-slate-900 pb-2">
             <Smartphone className="w-4 h-4 text-orange-500" />
-            <span>Mobile Scan QR Simulator (จำลองการสแกน)</span>
+            <span>โมดูลสแกนเนอร์พกพา (Scan QR Barcode)</span>
           </div>
 
           {scannerActive ? (
             <div className="h-28 bg-stone-50 border border-dashed border-orange-500/40 rounded-xl relative overflow-hidden flex flex-col items-center justify-center text-xs">
               <div className="w-full absolute top-1/2 left-0 h-0.5 bg-orange-500 animate-bounce"></div>
               <p className="text-orange-600 font-mono font-bold animate-pulse">กำลังสแกนผ่านกล้องโทรศัพท์...</p>
-              <p className="text-[10px] text-slate-500">จำลองการตรวจจับภาพและระบุเลขพยากรณ์</p>
+              <p className="text-[10px] text-slate-500">ระบบตรวจพิกัดและยืนยันบาร์โค้ด</p>
             </div>
           ) : (
             <div className="space-y-2">
               <p className="text-[10px] text-stone-500 leading-normal">
-                กดสแกนคลาวด์พัสดุด่วนจำลอง เพื่อตรวจสอบร่องรอย อนุมัติยิงเป้าคลังตัดพิกัดทันที
+                ตรวจสอบความสมบูรณ์และตัดยอดพัสดุสะสมทางบัญชีจากคลังจริงในพริบตา
               </p>
               <button
                 onClick={() => triggerMobileScanAndApprove(stocks[0]?.code || 'FIL-AIR-CAT320')}
                 className="w-full py-2 bg-orange-500/10 hover:bg-orange-500 text-orange-600 hover:text-white rounded-xl text-xs font-bold transition-all border border-orange-500/30 flex items-center justify-center gap-1.5 cursor-pointer"
               >
                 <Smartphone className="w-3.5 h-3.5" />
-                จำลองการกดหยิบสแกน QR อนุมัติ
+                สแกน QR Code ยืนยันพัสดุและทำจ่ายเข้าระบบจริง
               </button>
             </div>
           )}

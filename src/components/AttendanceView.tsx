@@ -378,7 +378,8 @@ export default function AttendanceView({ attendances, onAddAttendance, onUpdateA
   };
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-12 gap-6" id="attendance-log-main">
+    <div className="space-y-6">
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6" id="attendance-log-main">
       {/* 1. Left Logs Cards Panel (8 Columns) */}
       <div className="lg:col-span-8 bg-stone-50/40 border border-stone-200 rounded-2xl p-5 shadow-sm backdrop-blur-md flex flex-col justify-between">
         <div>
@@ -424,13 +425,13 @@ export default function AttendanceView({ attendances, onAddAttendance, onUpdateA
 
           {/* Action Row tab triggers */}
           <div className="flex justify-between items-center mt-4 border-b border-stone-200 pb-3">
-            <h3 className="text-xs font-bold text-slate-350">ประวัติสแกนการลงเวลางานพฤหัสที่ 28 พฤษภาคม 2026</h3>
+            <h3 className="text-xs font-bold text-slate-350">ประวัติสแกนการลงเวลางานจริง</h3>
             <button
               onClick={() => setShowClockForm(true)}
               className="bg-orange-500 hover:bg-orange-600 px-3.5 py-1.5 rounded-xl text-xs font-bold text-white shadow transition-all flex items-center gap-1.5 cursor-pointer"
             >
               <Smartphone className="w-3.5 h-3.5" />
-              จำลองกล้องพิกัดตอกบัตร
+              บันทึกเวลาผ่านกล้องพิกัดจริง
             </button>
           </div>
 
@@ -1081,5 +1082,86 @@ export default function AttendanceView({ attendances, onAddAttendance, onUpdateA
         )}
       </div>
     </div>
+
+    {/* Table of All Attendance Logs */}
+    <div className="bg-white p-6 rounded-3xl border border-stone-200/50 shadow-sm" id="all-attendance-records-table">
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-4 border-b border-stone-100 pb-4">
+        <div>
+          <h2 className="text-md font-bold text-stone-800 font-sans tracking-tight">ตารางประวัติเวลาการเข้า-ออกงานทั้งหมด</h2>
+          <p className="text-xs text-stone-500 mt-1 font-sans">
+            แสดงข้อมูลบันทึกสถิติลงเวลางาน พิกัดดาวเทียม และรูปเซลฟี่ยืนยันจากฐานข้อมูลจริง
+          </p>
+        </div>
+        <span className="bg-[#fffdf2] text-amber-700 text-xs font-mono px-3 py-1 rounded-xl border border-amber-200/60 font-bold shrink-0">
+          ทั้งหมด {attendances.length} รายการ
+        </span>
+      </div>
+
+      {attendances.length === 0 ? (
+        <div className="text-center py-12 text-stone-400 text-xs bg-stone-50 rounded-2xl border border-dashed border-stone-200">
+           ไม่มีประวัติลงเวลาปฏิบัติงานในระบบ
+        </div>
+      ) : (
+        <div className="overflow-x-auto">
+          <table className="w-full text-left text-xs text-stone-600 border-collapse">
+            <thead>
+              <tr className="border-b border-stone-200/60 text-stone-400 font-extrabold uppercase tracking-wider text-[10px]">
+                <th className="py-3 px-3">รูปถ่าย</th>
+                <th className="py-3 px-3">ชื่อช่าง / พนักงาน</th>
+                <th className="py-3 px-3">ตำแหน่งงาน</th>
+                <th className="py-3 px-3">สถานที่เข้างาน</th>
+                <th className="py-3 px-3">เวลาตอกเข้า</th>
+                <th className="py-3 px-3">เวลาตอกออก</th>
+                <th className="py-3 px-3">กะพิเศษ (OT)</th>
+                <th className="py-3 px-3">พิกัดดาวเทียม</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-stone-100">
+              {attendances.map((log) => (
+                <tr 
+                  key={log.id} 
+                  className="hover:bg-stone-50/80 transition-colors cursor-pointer"
+                  onClick={() => {
+                    setSelectedLogId(log.id);
+                  }}
+                >
+                  <td className="py-3 px-3 shrink-0">
+                    <div className="w-9 h-9 rounded-lg overflow-hidden border border-stone-200 bg-stone-100">
+                      <img src={log.photoUrl} alt="Selfie" className="w-full h-full object-cover" />
+                    </div>
+                  </td>
+                  <td className="py-3 px-3 font-bold text-stone-800">
+                    {log.employeeName}
+                  </td>
+                  <td className="py-3 px-3 font-semibold text-stone-600">
+                    {log.role}
+                  </td>
+                  <td className="py-3 px-3 text-stone-700">
+                    {log.siteName}
+                  </td>
+                  <td className="py-3 px-3 font-mono text-emerald-600 font-bold">
+                    🕒 {log.checkInTime} น.
+                  </td>
+                  <td className="py-3 px-3 font-mono text-rose-500 font-bold">
+                    {log.checkOutTime ? `👋 ${log.checkOutTime} น.` : '🟢 กำลังทำงาน'}
+                  </td>
+                  <td className="py-3 px-3">
+                    <span className={`px-2 py-0.5 rounded text-[9px] font-black uppercase ${
+                      log.isOvertime ? 'bg-amber-100 text-amber-800 border border-amber-200/50' : 'bg-emerald-100 text-emerald-800 border border-emerald-200/50'
+                    }`}>
+                      {log.isOvertime ? 'มี OT' : 'กะปกติ'}
+                    </span>
+                  </td>
+                  <td className="py-3 px-3 font-mono text-stone-500 text-[10.5px]">
+                    {log.gpsLocIn} {log.gpsLocOut ? `/ ขากลับ: ${log.gpsLocOut}` : ''}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  </div>
   );
 }

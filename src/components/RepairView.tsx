@@ -261,7 +261,8 @@ export default function RepairView({
   };
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-12 gap-6" id="repair-module-main">
+    <div className="space-y-6">
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6" id="repair-module-main">
       {/* 1. Left Fault Reports List (8 Columns) */}
       <div className="lg:col-span-8 bg-stone-50/40 border border-stone-200 rounded-2xl p-5 shadow-sm backdrop-blur-md flex flex-col justify-between">
         <div>
@@ -653,5 +654,89 @@ export default function RepairView({
         )}
       </div>
     </div>
+
+    {/* Table of All Repair Requests */}
+    <div className="bg-white p-6 rounded-3xl border border-stone-200/50 shadow-sm mt-8" id="all-repair-records-table">
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-4 border-b border-stone-100 pb-4">
+        <div>
+          <h2 className="text-md font-bold text-stone-800 font-sans tracking-tight">ตารางประวัติคำร้องใบแจ้งซ่อมเครื่องจักรทั้งหมด</h2>
+          <p className="text-xs text-stone-500 mt-1 font-sans">
+            รายการบันทึกอาการขัดข้อง ระบบตรวจสอบช่าง และเอกสารไฟล์ลงนามวิศวกรเครื่องกล
+          </p>
+        </div>
+        <span className="bg-[#fffdf2] text-amber-700 text-xs font-mono px-3 py-1 rounded-xl border border-amber-200/60 font-bold shrink-0">
+          ทั้งหมด {repairs.length} รายการ
+        </span>
+      </div>
+
+      {repairs.length === 0 ? (
+        <div className="text-center py-12 text-stone-400 text-xs bg-stone-50 rounded-2xl border border-dashed border-stone-200">
+           ไม่มีผลงานแจ้งซ่อมในระบบฐานข้อมูล
+        </div>
+      ) : (
+        <div className="overflow-x-auto">
+          <table className="w-full text-left text-xs text-stone-600 border-collapse">
+            <thead>
+              <tr className="border-b border-stone-200/60 text-stone-400 font-extrabold uppercase tracking-wider text-[10px]">
+                <th className="py-3 px-3">เลขที่</th>
+                <th className="py-3 px-3">เครื่องจักรกล</th>
+                <th className="py-3 px-3">อาการขัดข้องที่รายงาน</th>
+                <th className="py-3 px-3">วิศวกรผู้แจ้ง</th>
+                <th className="py-3 px-3">รายละเอียดซ่อมของช่าง</th>
+                <th className="py-3 px-3">วันเวลาแจ้งซ่อม</th>
+                <th className="py-3 px-3 text-right">สถานะคืบหน้า</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-stone-100">
+              {repairs.map((r) => {
+                const machine = machinery.find(m => m.id === r.machineryId);
+                return (
+                  <tr 
+                    key={r.id} 
+                    className="hover:bg-stone-50/80 transition-colors cursor-colors cursor-pointer"
+                    onClick={() => {
+                      setSelectedRepairId(r.id);
+                    }}
+                  >
+                    <td className="py-3.5 px-3 font-mono text-stone-550 shrink-0">
+                      {r.id.substring(0, 8)}
+                    </td>
+                    <td className="py-3.5 px-3 font-bold text-stone-800">
+                      <div>
+                        {machine?.code || 'ยานยนต์ร่วม'}
+                        <span className="block text-[10px] text-stone-400 font-normal">{machine?.brand} {machine?.model}</span>
+                      </div>
+                    </td>
+                    <td className="py-3.5 px-3 text-stone-700 max-w-xs truncate">
+                      {r.problemDesc}
+                    </td>
+                    <td className="py-3.5 px-3 font-semibold text-stone-600">
+                      {r.reporterName}
+                    </td>
+                    <td className="py-3.5 px-3 text-stone-600 italic">
+                      {r.assignedTech ? `ช่างเบิก: ${r.assignedTech}` : <span className="text-stone-300">รอมอบหมายช่าง</span>}
+                    </td>
+                    <td className="py-3.5 px-3 font-mono text-stone-500">
+                      {r.timestamp}
+                    </td>
+                    <td className="py-3.5 px-3 text-right">
+                      <span className={`px-2 py-0.5 rounded-full font-extrabold text-[9.5px] ${
+                        r.status === 'completed' ? 'bg-emerald-50 text-emerald-600 border border-emerald-100' :
+                        r.status === 'repairing' ? 'bg-orange-50 text-orange-600 border border-orange-105 animate-pulse' :
+                        'bg-rose-50 text-rose-600 border border-rose-105'
+                      }`}>
+                        {r.status === 'completed' ? 'เสร็จปิดจ็อบ' :
+                         r.status === 'repairing' ? 'ช่างกำลังทำ' : 'แจ้งซ่อมใหม่'}
+                      </span>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  </div>
   );
 }

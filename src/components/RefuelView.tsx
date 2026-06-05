@@ -228,7 +228,8 @@ export default function RefuelView({ refuels, machinery, onAddRefuel, onUpdateRe
   }, [refuels]);
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-12 gap-6" id="refueling-module-main">
+    <div className="space-y-6">
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6" id="refueling-module-main">
       {/* 1. Left Requests Panel (8 Columns) */}
       <div className="lg:col-span-8 bg-stone-50/40 border border-stone-200 rounded-2xl p-5 shadow-sm backdrop-blur-md flex flex-col justify-between">
         <div>
@@ -520,7 +521,7 @@ export default function RefuelView({ refuels, machinery, onAddRefuel, onUpdateRe
         <div className="bg-white/40 border-t border-stone-200 mt-4 pt-3 text-[11px] text-slate-455 flex items-center justify-between">
           <span className="flex items-center gap-1.5 text-[10px] text-stone-500">
             <TrendingUp className="w-4 h-4 text-orange-600 shrink-0" />
-            *ระบบใช้วอลุ่มจำลองภาพไมล์รถยนต์และบดดิน เพื่อขยายผลปอนด์ราคาน้ำมันโครงการให้คุ้มทุนที่สุด
+            *ระบบประมวลผลคำนวณข้อมูลไมล์รถยนต์และบันทึกปริมาณเพื่อขยายผลวิเคราะห์ประสิทธิภาพการใช้น้ำมันโครงการหลัก
           </span>
           <span className="font-mono text-slate-450">Fuel Audit Live 360</span>
         </div>
@@ -734,5 +735,97 @@ export default function RefuelView({ refuels, machinery, onAddRefuel, onUpdateRe
         )}
       </div>
     </div>
+
+    {/* Table of All Refueling Requests */}
+    <div className="bg-white p-6 rounded-3xl border border-stone-200/50 shadow-sm mt-8" id="all-refuel-records-table">
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-4 border-b border-stone-100 pb-4">
+        <div>
+          <h2 className="text-md font-bold text-stone-800 font-sans tracking-tight">ตารางสถิติกดขอเติมและจ่ายน้ำมันโครงการทั้งหมด</h2>
+          <p className="text-xs text-stone-500 mt-1 font-sans">
+            ข้อมูลการคุมยอดวอลุ่มเติมน้ำมันโครงการหลัก รอยยิ้ม และระบบการประมวลบิลใบเสร็จดิจิทัลแบบ 360 องศา
+          </p>
+        </div>
+        <span className="bg-[#fffdf2] text-amber-700 text-xs font-mono px-3 py-1 rounded-xl border border-amber-200/60 font-bold shrink-0">
+          ทั้งหมด {refuels.length} รายการ
+        </span>
+      </div>
+
+      {refuels.length === 0 ? (
+        <div className="text-center py-12 text-stone-400 text-xs bg-stone-50 rounded-2xl border border-dashed border-stone-200">
+           ไม่มีข้อมูลการสั่งเติมน้ำมันโครงการในฐานข้อมูล
+        </div>
+      ) : (
+        <div className="overflow-x-auto">
+          <table className="w-full text-left text-xs text-stone-600 border-collapse">
+            <thead>
+              <tr className="border-b border-stone-200/60 text-stone-400 font-extrabold uppercase tracking-wider text-[10px]">
+                <th className="py-3 px-3">เลขที่เอกสาร</th>
+                <th className="py-3 px-3">เครื่องจักรกล</th>
+                <th className="py-3 px-3">ชนิดของน้ำมัน</th>
+                <th className="py-3 px-3">ปริมาณเสนอขอ</th>
+                <th className="py-3 px-3">ปริมาณเติมจริง</th>
+                <th className="py-3 px-3">ผู้บันทึกเสนอ</th>
+                <th className="py-3 px-3">วันเวลาเติม</th>
+                <th className="py-3 px-3 text-right">สถานะ</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-stone-100">
+              {refuels.map((rf) => {
+                const machine = machinery.find(m => m.id === rf.machineryId);
+                return (
+                  <tr 
+                    key={rf.id} 
+                    className="hover:bg-stone-50/80 transition-colors cursor-pointer"
+                    onClick={() => {
+                      setSelectedRefuelId(rf.id);
+                    }}
+                  >
+                    <td className="py-3.5 px-3 font-mono font-bold text-stone-600 select-all shrink-0">
+                      {rf.documentNo}
+                    </td>
+                    <td className="py-3.5 px-3 font-bold text-stone-800">
+                      <div>
+                        {machine?.code || 'เครื่องยนต์ปูยาง'}
+                        <span className="block text-[10px] text-stone-400 font-normal">{rf.plateNumber}</span>
+                      </div>
+                    </td>
+                    <td className="py-3.5 px-3">
+                      <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-stone-100 text-stone-700">
+                        {rf.fuelType === 'diesel' ? 'ดีเซล' : rf.fuelType === 'premium_diesel' ? 'ดีเซลพรีเมียม B7' : 'แก๊สโซฮอล์ 95'}
+                      </span>
+                    </td>
+                    <td className="py-3.5 px-3 font-mono font-bold text-stone-700">
+                      {rf.requestedLiters} ลิตร
+                    </td>
+                    <td className="py-3.5 px-3 font-mono text-emerald-600 font-bold">
+                      {rf.actualLiters ? `${rf.actualLiters} ลิตร` : <span className="text-stone-300">-</span>}
+                    </td>
+                    <td className="py-3.5 px-3 font-semibold text-stone-600">
+                      {rf.requesterName}
+                    </td>
+                    <td className="py-3.5 px-3 font-mono text-stone-500">
+                      {rf.date}
+                    </td>
+                    <td className="py-3.5 px-3 text-right">
+                      <span className={`px-2 py-0.5 rounded-full font-extrabold text-[9.5px] ${
+                        rf.status === 'completed' ? 'bg-blue-50 text-blue-600 border border-blue-100' :
+                        rf.status === 'approved_to_fill' ? 'bg-emerald-50 text-emerald-600 border border-emerald-100 animate-pulse' :
+                        rf.status === 'cancelled' ? 'bg-red-50 text-red-650 border border-red-105' :
+                        'bg-amber-50 text-amber-600 border border-amber-105'
+                      }`}>
+                        {rf.status === 'completed' ? 'เติมจริงแล้ว' :
+                         rf.status === 'approved_to_fill' ? 'อนุมัติเติ่มแล้ว' :
+                         rf.status === 'cancelled' ? 'ยกเลิก' : 'รออนุมัติ'}
+                      </span>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  </div>
   );
 }

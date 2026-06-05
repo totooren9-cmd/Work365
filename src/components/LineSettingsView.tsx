@@ -28,8 +28,8 @@ export default function LineSettingsView() {
   const [dbLoading, setDbLoading] = useState(true);
 
   // Group 1: Attendance
-  const [tokenAttendance, setTokenAttendance] = useState(() => localStorage.getItem('LINE_TOKEN_ATTENDANCE') || '');
-  const [groupAttendance, setGroupAttendance] = useState(() => localStorage.getItem('LINE_GROUP_ATTENDANCE') || '');
+  const [tokenAttendance, setTokenAttendance] = useState(() => localStorage.getItem('LINE_TOKEN_ATTENDANCE') || 'emexPY8OBr3kHbSKKDRNh9W33tnL9dHqLxtD3Zqwx6fYBpy7UMv6BqU65FAJ8L1VhXdmqb7nE9H/AmyijvpPnNlcFgob0ET7ysPGosTEO33GgL6ccIn60mxibiOrEZ47yVH+EkKWcsTOX+RUhI7U6gdB04t89/1O/w1cDnyilFU=');
+  const [groupAttendance, setGroupAttendance] = useState(() => localStorage.getItem('LINE_GROUP_ATTENDANCE') || 'Cfd9f3c46111cf32db3e3e69b6961fa3e');
   
   // Group 2: Work/General
   const [tokenWork, setTokenWork] = useState(() => localStorage.getItem('LINE_TOKEN_WORK') || '');
@@ -79,8 +79,8 @@ export default function LineSettingsView() {
         if (settings && settings.length > 0) {
           settings.forEach(item => {
             if (item.moduleName === 'attendance') {
-              setTokenAttendance(item.channelAccessToken || '');
-              setGroupAttendance(item.groupId || '');
+              setTokenAttendance(item.channelAccessToken || 'emexPY8OBr3kHbSKKDRNh9W33tnL9dHqLxtD3Zqwx6fYBpy7UMv6BqU65FAJ8L1VhXdmqb7nE9H/AmyijvpPnNlcFgob0ET7ysPGosTEO33GgL6ccIn60mxibiOrEZ47yVH+EkKWcsTOX+RUhI7U6gdB04t89/1O/w1cDnyilFU=');
+              setGroupAttendance(item.groupId || 'Cfd9f3c46111cf32db3e3e69b6961fa3e');
             } else if (item.moduleName === 'operations') {
               setTokenWork(item.channelAccessToken || '');
               setGroupWork(item.groupId || '');

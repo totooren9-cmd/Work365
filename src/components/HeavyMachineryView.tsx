@@ -98,7 +98,8 @@ export default function HeavyMachineryView({ machinery, onAddMachinery, onUpdate
   };
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-12 gap-6" id="machinery-view-grid">
+    <div className="space-y-6">
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6" id="machinery-view-grid">
       {/* 1. Left Machinery Catalog Cards Panel (8 Columns) */}
       <div className="lg:col-span-8 bg-stone-50/40 border border-stone-200 rounded-2xl p-5 shadow-sm backdrop-blur-md flex flex-col justify-between">
         <div>
@@ -421,5 +422,83 @@ export default function HeavyMachineryView({ machinery, onAddMachinery, onUpdate
         )}
       </div>
     </div>
+
+    {/* Table of All Heavy Machinery */}
+    <div className="bg-white p-6 rounded-3xl border border-stone-200/50 shadow-sm mt-8" id="all-machinery-records-table">
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-4 border-b border-stone-100 pb-4">
+        <div>
+          <h2 className="text-md font-bold text-stone-800 font-sans tracking-tight">ตารางทำบัญชีคุมเครื่องจักรและยานพาหนะทั้งหมด</h2>
+          <p className="text-xs text-stone-500 mt-1 font-sans">
+            ทะเบียนรวมตรวจสอบเรือเรือนบดตักรถสัญจร พร้อมพารามิเตอร์มิเตอร์สะสมประสิทธิภาพการบดย่อยหิน
+          </p>
+        </div>
+        <span className="bg-[#fffdf2] text-amber-700 text-xs font-mono px-3 py-1 rounded-xl border border-amber-200/60 font-bold shrink-0">
+          กรองแล้ว {filteredMachinery.length} จาก {machinery.length} เครื่อง
+        </span>
+      </div>
+
+      {filteredMachinery.length === 0 ? (
+        <div className="text-center py-12 text-stone-400 text-xs bg-stone-50 rounded-2xl border border-dashed border-stone-200">
+           ไม่พบรายการเครื่องจักรกลตรงกับคำค้นหา
+        </div>
+      ) : (
+        <div className="overflow-x-auto">
+          <table className="w-full text-left text-xs text-stone-600 border-collapse">
+            <thead>
+              <tr className="border-b border-stone-200/60 text-stone-400 font-extrabold uppercase tracking-wider text-[10px]">
+                <th className="py-3 px-3">รหัสทรัพย์สิน</th>
+                <th className="py-3 px-3">ชื่อเรียกเครื่องจักร</th>
+                <th className="py-3 px-3">ยี่ห้อ / รุ่น</th>
+                <th className="py-3 px-3">เลขทะเบียนรถ</th>
+                <th className="py-3 px-3">เลขมิเตอร์ล่าสุด</th>
+                <th className="py-3 px-3">พนักงานขับคดี</th>
+                <th className="py-3 px-3 text-right">สถานะพร้อมใช้</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-stone-100">
+              {filteredMachinery.map((m) => (
+                <tr 
+                  key={m.id} 
+                  className="hover:bg-stone-50/80 transition-colors cursor-pointer"
+                  onClick={() => {
+                    setSelectedMachineId(m.id);
+                  }}
+                >
+                  <td className="py-3.5 px-3 font-mono font-bold text-orange-600">
+                    {m.code}
+                  </td>
+                  <td className="py-3.5 px-3 font-bold text-stone-800">
+                    {m.name}
+                  </td>
+                  <td className="py-3.5 px-3 text-stone-600 font-semibold">
+                    {m.model}
+                  </td>
+                  <td className="py-3.5 px-3 font-mono text-stone-500">
+                    {m.plateNumber}
+                  </td>
+                  <td className="py-3.5 px-3 font-mono text-stone-700 font-bold">
+                    ⏱️ {m.hoursMeter?.toLocaleString() || 0} ชม.
+                  </td>
+                  <td className="py-3.5 px-3 font-semibold text-stone-600">
+                    {m.responsibleName}
+                  </td>
+                  <td className="py-3.5 px-3 text-right">
+                    <span className={`px-2 py-0.5 rounded-full font-extrabold text-[9.5px] ${
+                      m.status === 'active' ? 'bg-emerald-50 text-emerald-600 border border-emerald-100' :
+                      m.status === 'under_repair' ? 'bg-rose-50 text-rose-600 border border-rose-105' :
+                      'bg-amber-50 text-amber-600 border border-amber-105'
+                    }`}>
+                      {m.status === 'active' ? '🟢 พร้อมกุย' :
+                       m.status === 'under_repair' ? '🔴 ซ่อมแซม' : '🟡 เลยกำหนด PM'}
+                    </span>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  </div>
   );
 }

@@ -134,10 +134,10 @@ export default function LineFlexBuilder() {
   const currentData = flexData[activeType];
 
   const [channelAccessToken, setChannelAccessToken] = useState(() => 
-    localStorage.getItem('LINE_CHANNEL_ACCESS_TOKEN') || 'LOsEWhXvFup41WFZWMyMZtUwqGFWws583/YbGvEGtADMlAEfw1kJoc61miQlxR155ayovX2w+wQnWAAUGqKInRMkg43XgFvxcXoo8QkbPbDOso+a0PpwwBQDFUjQYF9LIuiemAo9f/iqKRxsJh6UXgdB04t89/1O/w1cDnyilFU='
+    localStorage.getItem('LINE_CHANNEL_ACCESS_TOKEN') || 'emexPY8OBr3kHbSKKDRNh9W33tnL9dHqLxtD3Zqwx6fYBpy7UMv6BqU65FAJ8L1VhXdmqb7nE9H/AmyijvpPnNlcFgob0ET7ysPGosTEO33GgL6ccIn60mxibiOrEZ47yVH+EkKWcsTOX+RUhI7U6gdB04t89/1O/w1cDnyilFU='
   );
   const [groupId, setGroupId] = useState(() => 
-    localStorage.getItem('LINE_GROUP_ID') || 'C94ac0eec7f7dc7b97fd2767104d1e7a0'
+    localStorage.getItem('LINE_GROUP_ID') || 'Cfd9f3c46111cf32db3e3e69b6961fa3e'
   );
   const [isSending, setIsSending] = useState(false);
 
