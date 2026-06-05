@@ -293,10 +293,14 @@ async function startServer() {
         console.error("LINE API Error:", response.status, errData);
         
         let customMessage = "LINE API Error";
-        if (errData.message === "Failed to send messages") {
-          customMessage = "Push Failed: บอทยังไม่ได้เข้าร่วมกลุ่ม (ยังไม่ถูกเชิญเข้ากลุ่ม) หรือ Group ID ที่ระบุไม่ถูกต้อง";
+        if (activeToken.startsWith("emexPY8OBr3") || activeGroupId === "Cfd9f3c46111cf32db3e3e69b6961fa3e") {
+          customMessage = "🔴 ใช้รหัสระบบตัวอย่าง: กรุณาระบุรหัส Token และ Group ID กลุ่มแชทไลน์ของคุณเองในเมนู 'ตั้งค่ากลุ่มไลน์แจ้งเตือน' จากนั้นเชิญ LINE Bot (OA) เข้าร่วมกลุ่มแชทก่อนทดสอบใช้งาน";
+        } else if (errData.message === "Failed to send messages") {
+          customMessage = "Push Failed: บอทยังไม่ได้เข้าร่วมกลุ่ม (ยังไม่ถูกเชิญเข้ากลุ่มไลน์) หรือระบุรหัส Group ID ไม่ถูกต้อง กรุณาเข้ากลุ่ม ➡️ กดเมนูขวาบน ➡️ เชิญบ็อต (LINE Bot OA คู่ตัว) เข้าร่วมกลุ่มก่อนทำการแจ้งเตือน";
         } else if (errData.details) {
           customMessage = `Push Failed: รูปแบบ Flex JSON ไม่ถูกต้อง (${errData.message})`;
+        } else {
+          customMessage = `Failed to send LINE message: ${errData.message || response.statusText}`;
         }
 
         return res.status(response.status).json({ 

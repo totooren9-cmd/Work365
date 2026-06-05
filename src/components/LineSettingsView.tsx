@@ -372,6 +372,61 @@ export default function LineSettingsView() {
         </div>
       </div>
 
+      {/* Troubleshooting Alert Box */}
+      <div className="bg-amber-50/70 border border-amber-200 rounded-3xl p-5 text-stone-800 space-y-3 shadow-sm" id="line-troubleshooting-help-box">
+        <div className="flex items-start gap-3">
+          <div className="w-10 h-10 rounded-2xl bg-amber-100 text-amber-700 flex items-center justify-center shrink-0 mt-0.5">
+            <AlertCircle className="w-5 h-5 text-amber-700 animate-pulse" />
+          </div>
+          <div className="space-y-1">
+            <h3 className="text-sm font-black text-amber-900">🔔 วิธีแก้ไขข้อผิดพลาดระบบแจ้งเตือน LINE (Troubleshooting Guide)</h3>
+            <p className="text-xs text-amber-800 leading-relaxed">
+              หากระบบขึ้นข้อผิดพลาดหรือเกิดสถานะล้มเหลว <code className="font-mono bg-amber-100 text-amber-950 px-1 py-0.5 rounded text-[11px]">Failed to send messages (400)</code> ในขณะลงเวลางาน หรือกดทดสอบการแจ้งเตือน เป็นเพราะปัจจัยทางเทคนิค 2 ส่วนดังนี้:
+            </p>
+          </div>
+        </div>
+        
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-1 pl-1 md:pl-13 text-[11px] text-stone-600">
+          <div className="space-y-2 bg-white/60 p-3 rounded-2xl border border-amber-150">
+            <span className="font-extrabold text-amber-900 block flex items-center gap-1">📍 1. คุณต้องเชิญบ็อต (LINE Bot OA) เข้าร่วมกลุ่มแชทนั้นๆ ก่อน</span>
+            <p className="leading-relaxed">
+              แม้คุณจะกรอก LINE Group ID ถูกต้อง แต่หากในกลุ่มแชทนั้น <b>ยังไม่ได้เชิญบ็อต (LINE OA) ที่สร้าง Channel Access Token นี้เข้าร่วมกลุ่มแชท</b> ระบบของ LINE API จะบล็อกการโพสต์ข้อความทันทีด้วย Error 400
+            </p>
+            <span className="text-[10px] text-amber-700 block font-semibold">💡 วิธีแก้ไข: เข้าไปที่กลุ่มแชท LINE ➡️ กดปุ่มเมนูขวาบน ➡️ เลือก 'เชิญ' (Invite) ➡️ ค้นหาบัญชีบ็อตรองรับแล้วเชิญเข้ามาในกลุ่มคู่สนทนาทันที</span>
+          </div>
+
+          <div className="space-y-2 bg-white/60 p-3 rounded-2xl border border-amber-150">
+            <span className="font-extrabold text-amber-900 block flex items-center gap-1">🔑 2. ต้องเปลี่ยนจาก Group ID / Token แม่แบบมาเป็นของคุณเอง</span>
+            <p className="leading-relaxed">
+              ค่าเริ่มต้นที่แสดงตอนแรก เป็นกลุ่มแชทพรีวิวกองกลาง หากคุณต้องการส่งเข้าห้องทำงานแผนกของคุณ กรุณาสร้าง LINE Developers Account, ตั้ง LINE OA, ออก Token, ดึง บ็อตเข้ากลุ่ม, นำ Token และ Group ID ของกลุ่มตนเองมากรอกลงเซิร์ฟเวอร์
+            </p>
+            <span className="text-[10px] text-amber-700 block font-semibold">💡 ข้อสังเกต: รหัสไอดีกลุ่มแชท LINE (Group ID) จะยาว 33 ตัวอักษร และขึ้นต้นด้วยอักษรภาษาอังกฤษ 'C' เสมอ ส่วนไอดีสมาชิกจะขึ้นต้นด้วย 'U'</span>
+          </div>
+
+          <div className="space-y-2 bg-white/60 p-3 rounded-2xl border border-amber-150 relative overflow-hidden flex flex-col justify-between">
+            <div>
+              <span className="font-extrabold text-amber-950 block flex items-center gap-1">☁️ 3. เปิดใช้งาน Google Drive API (สำหรับบันทึกภาพถ่ายหลักฐาน)</span>
+              <p className="leading-relaxed mt-1">
+                ระบบ FlowWork บันทึกภาพส่งงานและภาพตอกบัตรลงบนคลัง Google Drive ส่วนกลางของโครงการคุณ หากเกิด Error <code className="font-mono bg-amber-100 text-amber-900 text-[10px] px-1 rounded">Google Drive API has not been used before or is disabled</code> แปลว่ายังไม่ได้กดเปิดสิทธิ์ API ด้านเซิร์ฟเวอร์หลัก
+              </p>
+            </div>
+            <div className="pt-2">
+              <a 
+                href="https://console.developers.google.com/apis/api/drive.googleapis.com/overview?project=778841450865" 
+                target="_blank" 
+                referrerPolicy="no-referrer"
+                rel="noreferrer" 
+                className="w-full inline-flex items-center justify-center gap-1.5 bg-amber-600 hover:bg-amber-700 active:scale-95 text-white font-black py-2.5 px-3 rounded-xl transition-all shadow-sm text-center"
+              >
+                <span>🚀 คลิกเพื่อเปิดใช้งาน Drive API ใน 1 วินาที</span>
+                <ArrowRight className="w-3.5 h-3.5" />
+              </a>
+              <span className="text-[9px] text-stone-500 mt-1 block text-center font-semibold">🔒 ดำเนินการโดยสมบูรณ์บนคอนโซลพาร์ทเนอร์ Google Cloud</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
       {/* Main Forms Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
 

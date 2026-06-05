@@ -716,7 +716,7 @@ export default function App() {
                   if (!existingFallback) {
                     const fallback = document.createElement('div');
                     fallback.className = 'logo-fallback w-10 h-10 bg-gradient-to-tr from-amber-400 to-yellow-200 rounded-xl flex items-center justify-center font-black text-amber-900 text-sm shadow-[0_4px_12px_-2px_rgba(251,191,36,0.5)] border border-amber-100';
-                    fallback.innerText = 'FW';
+                    fallback.innerText = 'CNW';
                     parent.insertBefore(fallback, parent.firstChild);
                   }
                 }
@@ -724,10 +724,10 @@ export default function App() {
             />
             <div>
               <div className="flex items-center gap-1.5 leading-none">
-                <span className="font-display font-bold text-sm tracking-tight text-stone-800">FlowWork CMMS</span>
-                <span className="bg-amber-500 text-[9px] px-1.5 py-0.5 rounded-md font-bold text-stone-900 shadow-sm">360</span>
+                <span className="font-display font-bold text-sm tracking-tight text-stone-800">ชัยนาวิน คอนสตรัคชั่น</span>
+                <span className="bg-amber-500 text-[9px] px-1.5 py-0.5 rounded-md font-bold text-stone-900 shadow-sm">CNW</span>
               </div>
-              <span className="text-[10px] text-stone-500 font-medium tracking-wide">Enterprise Premium Platform</span>
+              <span className="text-[10px] text-stone-500 font-medium tracking-wide">บริษัท ชัยนาวิน คอนสตรัคชั่น จำกัด</span>
             </div>
           </div>
         </div>
@@ -838,7 +838,7 @@ export default function App() {
           </div>
           
           <div className="pt-4 border-t border-black/5 mt-auto text-[10px] text-stone-400 text-center font-bold tracking-wide">
-             FlowWork 360 • PREMIUM {theme.toUpperCase()}
+             ชัยนาวิน คอนสตรัคชั่น • PREMIUM {theme.toUpperCase()}
           </div>
         </nav>
 

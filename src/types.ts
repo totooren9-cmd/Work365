@@ -112,6 +112,12 @@ export interface AttendanceLog {
   isOvertime: boolean;
   otHours?: number;
   
+  // Custom enhanced additions for robust time registration
+  shift?: string;         // 'day' | 'night' | 'overtime'
+  temperature?: string;   // e.g. '36.5 °C' or 'ปกติ'
+  workActivity?: string;  // e.g. 'ซ่อมบำรุง', 'ขุดเจาะ', 'งานเอกสาร'
+  notes?: string;         // Additional comments
+
   // Enhanced attributes for Work-From-Home (WFH), retro-adjustments, and approvals
   attendanceType?: 'normal' | 'retro';
   approvalStatus?: 'pending_approval' | 'approved' | 'rejected';

@@ -165,8 +165,8 @@ export default function DashboardView({ machinery, expenses, refuels, stocks, ta
               <Sparkles className="w-3.5 h-3.5" />
               SaaS CMMS 360 Enterprise Mode
             </div>
-            <h1 className="text-3xl md:text-4xl font-display font-medium text-stone-800 tracking-tight">
-              FlowWork <span className="text-orange-500 font-bold">CMMS 360</span>
+            <h1 className="text-2xl sm:text-3xl md:text-4xl font-display font-medium text-stone-800 tracking-tight block">
+              ชัยนาวิน <span className="text-orange-500 font-extrabold">คอนสตรัคชั่น Co., Ltd.</span>
             </h1>
             <p className="text-sm text-stone-500 max-w-xl">
               ระบบศูนย์กลางบริหารงานซ่อมบำรุงเครือข่ายเครื่องจักรหนัก คลังอะไหล่สะสม ตารางช่าง และประเมินค่าใช้น้ำมันโครงการแบบพรีเมียม

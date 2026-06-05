@@ -82,6 +82,12 @@ export default function AttendanceView({
   const [otRequestedHours, setOtRequestedHours] = useState(2);
   const [otRequestedReason, setOtRequestedReason] = useState('');
 
+  // Extended check-in options states
+  const [workShift, setWorkShift] = useState('กะปกติ (08:00 - 17:00)');
+  const [workTemperature, setWorkTemperature] = useState('ปกติ (36.4 °C)');
+  const [workActivityType, setWorkActivityType] = useState('งานปฏิบัติการโครงสร้างและควบคุมเครื่องจักร');
+  const [workRemarkNotes, setWorkRemarkNotes] = useState('');
+
   // Supervisor state
   const [supervisorName, setSupervisorName] = useState('เจมส์ สมิท');
 
@@ -347,6 +353,8 @@ export default function AttendanceView({
     const isWfh = attendanceMode === 'wfh';
     const isRetro = attendanceMode === 'retro';
 
+    const checkInStatusText = `ลงเวลาปฎิบัติงานแบบ [${isWfh ? '🏠 WFH' : (isRetro ? '📅 ย้อนหลัง' : '🟢 ปกติ')}]: ${isWfh ? 'บ้านพักอาศัย' : workSite} | กะ: ${workShift} | สุขภาพ: ${workTemperature} | ลักษณะงาน: ${workActivityType}${workRemarkNotes ? ` | หมายเหตุ: ${workRemarkNotes}` : ''}`;
+
     if (photoSim.startsWith('data:')) {
       try {
         finalPhotoUrl = await uploadFileAndNotify({
@@ -354,7 +362,7 @@ export default function AttendanceView({
           module: 'Checkin',
           docId,
           uploadBy: workName,
-          status: `เข้างานแบบ [${isWfh ? '🏠 WFH' : (isRetro ? '📅 ย้อนหลัง' : '🟢 ปกติ')}]: ${isWfh ? 'สถานที่พักตน' : workSite}`
+          status: checkInStatusText
         });
       } catch (err) {
         console.error("Failed to upload check-in photo:", err);
@@ -368,7 +376,7 @@ export default function AttendanceView({
           jobType: isWfh ? 'Check In WFH' : (isRetro ? 'Check In Retroactive' : 'Check In'),
           operator: workName,
           timestamp: thaiDate,
-          status: `ลงเวลาเข้างานแบบ [${isWfh ? '🏠 WFH' : (isRetro ? '📅 ย้อนหลัง' : '🟢 ปกติ')}]: ${isWfh ? 'สถานที่พักตน' : workSite}`,
+          status: checkInStatusText,
           imageUrl: finalPhotoUrl
         });
       } catch (e) {
@@ -391,6 +399,11 @@ export default function AttendanceView({
       gpsLocIn: isWfh ? '13.7563, 100.5018 (พิกัดบ้านพักอาศัย WFH)' : gpsSim,
       gpsLocOut: undefined,
       
+      shift: workShift,
+      temperature: workTemperature,
+      workActivity: workActivityType,
+      notes: workRemarkNotes,
+      
       attendanceType: attendanceMode,
       approvalStatus: (isRetro || isWfh || otRequested) ? 'pending_approval' : 'approved',
       reason: isRetro ? retroReason : (isWfh ? 'ปฏิบัติงานแบบ Work From Home' : ''),
@@ -405,6 +418,7 @@ export default function AttendanceView({
     onAddAttendance(newLog);
     setSelectedLogId(newLog.id);
     setShowClockForm(false);
+    setWorkRemarkNotes(''); // Clear notes after submission
     stopCamera();
     setUploadingPhoto(false);
   };
@@ -838,6 +852,67 @@ export default function AttendanceView({
                         />
                       </div>
                     )}
+                  </div>
+                </div>
+
+                {/* Additional registration settings: shift, temperature, workActivity Type */}
+                <div className="p-4 bg-orange-50/25 border border-orange-200/55 rounded-2xl space-y-3 shadow-inner" id="additional-registration-settings">
+                  <span className="block text-[11px] text-stone-800 font-extrabold flex items-center gap-1 pb-2 border-b border-stone-100 uppercase tracking-wider">
+                    ⚙️ ตัวเลือกการลงเวลาเชิงลึก (Security & Shift Parameters)
+                  </span>
+                  
+                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+                    <div>
+                      <label className="block text-[10.5px] text-stone-500 font-bold mb-1">⏱️ กะ / ช่วงเวลาทำงาน (Shift)</label>
+                      <select
+                        value={workShift}
+                        onChange={(e) => setWorkShift(e.target.value)}
+                        className="w-full bg-white border border-stone-200 rounded-xl px-2.5 py-1.5 text-stone-800 font-bold outline-none text-xs focus:border-orange-500 shadow-sm"
+                      >
+                        <option value="กะปกติ (08:00 - 17:00)">กะปกติ (08:00 - 17:00)</option>
+                        <option value="กะบ่าย/ค่ำ (13:00 - 22:00)">กะบ่าย/ค่ำ (13:00 - 22:00)</option>
+                        <option value="กะดึก (22:00 - 07:00)">กะดึก (22:00 - 07:00)</option>
+                        <option value="กะพิเศษล่วงเวลาเร่งด่วน">กะพิเศษล่วงเวลาเร่งด่วน</option>
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="block text-[10.5px] text-stone-500 font-bold mb-1">🌡️ อุณหภูมิ / สุขภาพร่างกาย</label>
+                      <select
+                        value={workTemperature}
+                        onChange={(e) => setWorkTemperature(e.target.value)}
+                        className="w-full bg-white border border-stone-200 rounded-xl px-2.5 py-1.5 text-stone-800 font-bold outline-none text-xs focus:border-orange-500 shadow-sm"
+                      >
+                        <option value="ปกติ (36.4 °C)">ปกติ (36.4 °C)</option>
+                        <option value="ปกติ (36.5 °C)">ปกติ (36.5 °C)</option>
+                        <option value="ปกติ (36.6 °C)">ปกติ (36.6 °C)</option>
+                        <option value="ปกติ (36.7 °C)">ปกติ (36.7 °C)</option>
+                        <option value="ตัวอุ่นเล็กน้อย (37.2 °C)">ตัวอุ่นเล็กน้อย (37.2 °C)</option>
+                        <option value="มีไข้พะอืดพะอม (เกิน 37.5 °C)">มีไข้พะอืดพะอม (เกิน 37.5 °C)</option>
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="block text-[10.5px] text-stone-500 font-bold mb-1">🏗️ วัตถุประสงค์ / งานที่ลงมือหลักวันนี้</label>
+                      <input
+                        type="text"
+                        value={workActivityType}
+                        onChange={(e) => setWorkActivityType(e.target.value)}
+                        className="w-full bg-white border border-stone-200 rounded-xl px-2.5 py-1.5 text-stone-800 outline-none text-xs focus:border-orange-500 shadow-sm font-semibold"
+                        placeholder="เช่น ซ่อมเครื่องยนต์เกรดเดอร์, เทคอนกรีตฐานบด"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-[10.5px] text-stone-500 font-bold mb-1">📝 ระบุหมายเหตุเพิ่มเติม (Remarks / Safety status / Weather)</label>
+                    <input
+                      type="text"
+                      className="w-full bg-white border border-stone-200 rounded-xl px-3 py-1.5 text-stone-800 outline-none text-xs focus:border-orange-500 shadow-sm"
+                      value={workRemarkNotes}
+                      onChange={(e) => setWorkRemarkNotes(e.target.value)}
+                      placeholder="เช่น สวมใส่อุปกรณ์ป้องกัน PPE หมวกนิรภัยพร้อมหน้ากากอนามัยครบถ้วน / ทัศนวิสัยปกติดี"
+                    />
                   </div>
                 </div>
 
@@ -1476,6 +1551,24 @@ export default function AttendanceView({
                       </>
                     ) : (
                       <p className="text-emerald-600 animate-pulse font-extrabold flex items-center gap-1 text-[10.5px]">🟢 กำลังทำงานอยู่ในระเบียบวินัย</p>
+                    )}
+
+                    {/* Extended information parameters added for Chainawin Co., Ltd. */}
+                    {(selectedLog.shift || selectedLog.temperature || selectedLog.workActivity || selectedLog.notes) && (
+                      <div className="mt-2 text-left border-t border-dashed border-stone-200 pt-2 space-y-1 bg-stone-50/50 p-2 rounded-lg text-[10px]">
+                        {selectedLog.shift && (
+                          <p>⏱️ <strong className="text-stone-550">กะทำงาน:</strong> <span className="text-stone-700 bg-stone-100 rounded px-1 font-bold">{selectedLog.shift}</span></p>
+                        )}
+                        {selectedLog.temperature && (
+                          <p>🌡️ <strong className="text-stone-550">อุณหภูมิร่างกาย:</strong> <span className="text-orange-700 font-extrabold bg-orange-50/80 px-1.5 rounded">{selectedLog.temperature}</span></p>
+                        )}
+                        {selectedLog.workActivity && (
+                          <p>🏗️ <strong className="text-stone-550">ลักษณะกิจกรรมหน้างาน:</strong> <span className="text-stone-700 font-semibold font-sans">"{selectedLog.workActivity}"</span></p>
+                        )}
+                        {selectedLog.notes && (
+                          <p>📝 <strong className="text-stone-550">หมายเหตุสุขภาพ/หน้างาน:</strong> <span className="text-stone-600 italic">"{selectedLog.notes}"</span></p>
+                        )}
+                      </div>
                     )}
                   </div>
 
