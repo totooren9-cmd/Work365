@@ -20,12 +20,67 @@ import {
   Database,
   CloudLightning
 } from 'lucide-react';
-import { pushLineFlexMessage, testLineNotification } from '../utils/lineNotify';
-import { getLineSettingsFromDb, saveLineSettingsToDb } from '../supabaseService';
+import { pushLineFlexMessage, testLineNotification, convertGoogleDriveUrl, extractGoogleDriveFileId, ensureValidImageUrl } from '../utils/lineNotify';
+import { getLineSettingsFromDb, saveLineSettingsToDb, getEmployeeProfiles } from '../supabaseService';
 
 export default function LineSettingsView() {
   // Sync state
   const [dbLoading, setDbLoading] = useState(true);
+
+  // Diagnostics State
+  const [diagnosticRecords, setDiagnosticRecords] = useState<any[]>([]);
+  const [diagnosticLoading, setDiagnosticLoading] = useState(false);
+  const [diagnosticRunCount, setDiagnosticRunCount] = useState(0);
+
+  const runUrlDiagnostics = async () => {
+    try {
+      setDiagnosticLoading(true);
+      console.log("============= STARTING PHOTO URL DIAGNOSTICS =============");
+      const profiles = await getEmployeeProfiles();
+      console.log(`Retrieved ${profiles.length} employee profiles from database.`);
+      
+      const analyzed = profiles.map(p => {
+        const rawUrl = p.photoUrl || "";
+        const convertedUrl = convertGoogleDriveUrl(rawUrl);
+        const extractedId = extractGoogleDriveFileId(convertedUrl);
+        const finalUrl = ensureValidImageUrl(rawUrl);
+        
+        console.group(`🔍 AUDIT: Profile for ${p.name}`);
+        console.log(`👤 Name:`, p.name);
+        console.log(`🆔 ID:`, p.id);
+        console.log(`📂 Raw stored photo_url in DB:`, rawUrl || "(empty)");
+        console.log(`🔄 After convertGoogleDriveUrl():`, convertedUrl || "(empty)");
+        console.log(`🆔 Extracted Google Drive File ID:`, extractedId || "(no match)");
+        console.log(`🌐 Final validated URL mapped for LINE:`, finalUrl || "(invalid / empty)");
+        console.log(`📢 Expected Pattern Match:`, finalUrl.includes('drive.google.com/uc?export=view&id=') ? '✅ VALID DRIVE DIRECT LINK' : '⚠️ OTHER FORMAT OR EMPTY');
+        console.groupEnd();
+
+        return {
+          id: p.id,
+          name: p.name,
+          role: p.role,
+          rawUrl,
+          convertedUrl,
+          extractedId,
+          finalUrl,
+          isDrive: !!extractedId,
+          isValid: !!finalUrl
+        };
+      });
+
+      setDiagnosticRecords(analyzed);
+      setDiagnosticRunCount(prev => prev + 1);
+      console.log("============= PHOTO URL DIAGNOSTICS COMPLETED =============");
+    } catch (err) {
+      console.error("Error running database diagnostics:", err);
+    } finally {
+      setDiagnosticLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    runUrlDiagnostics();
+  }, []);
 
   // Group 1: Attendance
   const [tokenAttendance, setTokenAttendance] = useState(() => localStorage.getItem('LINE_TOKEN_ATTENDANCE') || 'emexPY8OBr3kHbSKKDRNh9W33tnL9dHqLxtD3Zqwx6fYBpy7UMv6BqU65FAJ8L1VhXdmqb7nE9H/AmyijvpPnNlcFgob0ET7ysPGosTEO33GgL6ccIn60mxibiOrEZ47yVH+EkKWcsTOX+RUhI7U6gdB04t89/1O/w1cDnyilFU=');
@@ -941,6 +996,119 @@ export default function LineSettingsView() {
           </div>
         </div>
 
+      </div>
+
+      {/* ======================= DATABASE PHOTO URL AUDIT & DIAGNOSTICS LAB ======================= */}
+      <div className="bg-white border border-stone-200 rounded-3xl p-6 space-y-4">
+        <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 border-b border-stone-100 pb-4">
+          <div className="space-y-1">
+            <h4 className="text-sm font-black text-stone-800 flex items-center gap-2">
+              <Beaker className="w-5 h-5 text-indigo-600" />
+              ห้องทดลองวินิจฉัย URL รูปภาพในระบบ (Supabase Profile Photo URL Audit Lab)
+            </h4>
+            <p className="text-[11px] text-stone-500 leading-normal font-medium max-w-2xl">
+              ระบบตรวจสอบความถูกต้องรูปภาพประจำตัวพนักงานจากตาราง <code className="bg-stone-100 px-1 py-0.5 rounded font-mono font-bold text-[10px] text-stone-700">employee_profiles</code> โดยจำลองการแปลง URL และการคัดลอกไฟล์ไอดี (File ID) ของ Google Drive เพื่อรับประกันภาพขึ้นจอแชท LINE API โดยผลลัพธ์ได้รับการคัดลอกลง Developer Console เช่นกัน
+            </p>
+          </div>
+          <button
+            onClick={runUrlDiagnostics}
+            disabled={diagnosticLoading}
+            className="flex items-center gap-1.5 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-55 font-black text-xs text-white rounded-xl shadow-sm transition-all cursor-pointer active:scale-95 shrink-0"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 ${diagnosticLoading ? 'animate-spin' : ''}`} />
+            <span>เริ่มวินิจฉัยข้อมูลใหม่ ({diagnosticRunCount})</span>
+          </button>
+        </div>
+
+        {diagnosticLoading ? (
+          <div className="flex flex-col items-center justify-center py-8 space-y-2">
+            <RefreshCw className="w-6 h-6 animate-spin text-indigo-600" />
+            <span className="text-xs font-bold text-stone-500 font-sans">กำลังดึงข้อมูลและประมวลผลความถูกต้อง...</span>
+          </div>
+        ) : diagnosticRecords.length === 0 ? (
+          <div className="text-center py-6 border border-dashed border-stone-200 rounded-2xl bg-stone-50">
+            <span className="text-xs text-stone-400 font-bold font-sans">ไม่มีประวัติการวินิจฉัย หรือไม่พบข้อมูลพนักงานประวัตินอกเขต</span>
+          </div>
+        ) : (
+          <div className="overflow-x-auto rounded-2xl border border-stone-100 shadow-sm">
+            <table className="w-full text-[11px] text-stone-600 font-medium">
+              <thead className="bg-stone-50 text-stone-700 text-left font-black uppercase tracking-wider text-[10px] border-b border-stone-100">
+                <tr>
+                  <th className="p-3 pl-4">พนักงาน / ตําแหน่ง</th>
+                  <th className="p-3 font-sans">ข้อมูลในฐานข้อมูล (Supabase Raw)</th>
+                  <th className="p-3">ระบบประมวลผล (Google Drive File ID Match)</th>
+                  <th className="p-3 text-right pr-4 font-sans">ผลลัพธ์ LINE URL Mapped</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-stone-100 bg-white">
+                {diagnosticRecords.map((r, idx) => (
+                  <tr key={r.id || idx} className="hover:bg-stone-50/50 transition-colors">
+                    <td className="p-3 pl-4">
+                      <div className="font-bold text-stone-900">{r.name}</div>
+                      <div className="text-[10px] text-stone-400 font-semibold">{r.role}</div>
+                    </td>
+                    <td className="p-3 max-w-[200px] truncate">
+                      {r.rawUrl ? (
+                        <a 
+                          href={r.rawUrl} 
+                          target="_blank" 
+                          rel="noreferrer" 
+                          title={r.rawUrl}
+                          className="font-mono text-[10px] text-stone-500 hover:text-indigo-600 font-semibold hover:underline"
+                        >
+                          {r.rawUrl}
+                        </a>
+                      ) : (
+                        <span className="text-stone-300 font-semibold italic">(ไม่มีรูปประจำตัว)</span>
+                      )}
+                    </td>
+                    <td className="p-3">
+                      {r.extractedId ? (
+                        <div className="space-y-1">
+                          <span className="inline-flex items-center gap-1 rounded bg-indigo-50 border border-indigo-150 px-1.5 py-0.5 text-[9.5px] font-bold text-indigo-700 font-mono">
+                            ID: {r.extractedId}
+                          </span>
+                          <span className="block text-[10px] text-green-600 font-black">✅ MATCHED DRIVE SUCCESS</span>
+                        </div>
+                      ) : r.rawUrl ? (
+                        <div className="space-y-1">
+                          <span className="inline-flex items-center gap-1 rounded bg-amber-50 border border-amber-150 px-1.5 py-0.5 text-[9.5px] font-bold text-amber-700">
+                            Normal Web Link
+                          </span>
+                          <span className="block text-[10px] text-stone-500 font-semibold">⚠️ DIRECT WEB RAW USE</span>
+                        </div>
+                      ) : (
+                        <span className="text-stone-300 italic">-</span>
+                      )}
+                    </td>
+                    <td className="p-3 text-right pr-4">
+                      {r.finalUrl ? (
+                        <div className="space-y-1">
+                          <a 
+                            href={r.finalUrl} 
+                            target="_blank" 
+                            rel="noreferrer" 
+                            className="inline-flex items-center gap-1 text-[10.5px] font-bold text-indigo-600 hover:underline"
+                          >
+                            <span>ดูรูปสาธารณะ DIRECT</span>
+                            <ArrowRight className="w-2.5 h-2.5" />
+                          </a>
+                          <div className="text-[9.5px] text-stone-400 font-mono font-bold max-w-xs truncate ml-auto" title={r.finalUrl}>
+                            {r.finalUrl}
+                          </div>
+                        </div>
+                      ) : (
+                        <span className="inline-flex items-center gap-1 rounded bg-rose-50 border border-rose-150 px-1.5 py-0.5 text-[9.5px] font-bold text-rose-500 font-sans">
+                          ❌ SKIP SEND IMG
+                        </span>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
 
       {/* ======================= REUSABLE INTEGRATION DOCUMENTATION AND EXPLANATION ======================= */}

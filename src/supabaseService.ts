@@ -580,8 +580,18 @@ export async function getEmployeeProfiles(): Promise<EmployeeProfile[]> {
 
 export async function getEmployeeProfileByName(name: string): Promise<EmployeeProfile | null> {
   try {
-    const { data, error } = await supabase.from('employee_profiles').select('*').eq('name', name).maybeSingle();
-    if (error || !data) return null;
+    if (!name) return null;
+    const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(name);
+    let data = null;
+    if (isUuid) {
+      const { data: uuidData } = await supabase.from('employee_profiles').select('*').eq('id', name).maybeSingle();
+      data = uuidData;
+    }
+    if (!data) {
+      const { data: nameData } = await supabase.from('employee_profiles').select('*').eq('name', name).maybeSingle();
+      data = nameData;
+    }
+    if (!data) return null;
     return {
       id: toUUID(data.id),
       name: data.name,
@@ -590,7 +600,7 @@ export async function getEmployeeProfileByName(name: string): Promise<EmployeePr
       createdAt: data.created_at
     };
   } catch (err) {
-    console.warn('[Supabase Service] Error loading employee_profile by name:', err);
+    console.warn('[Supabase Service] Error loading employee_profile by name or id:', err);
     return null;
   }
 }

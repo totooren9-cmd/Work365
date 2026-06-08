@@ -329,7 +329,7 @@ export async function sendLineTaskNotification(task: WorkScheduleTask, machinery
     : (task.assignedTo || 'ไม่ได้ระบุ');
 
   const firstPhoto = task.photoUrls && task.photoUrls.length > 0 ? task.photoUrls[0] : null;
-  const verifiedPhotoUrl = ensureValidImageUrl(firstPhoto);
+  const verifiedPhotoUrl = firstPhoto ? ensureValidImageUrl(convertGoogleDriveUrl(firstPhoto)) : "";
 
   let profilePhotoUrl = "";
   let profileRole = "ช่างอุทยาน / ซ่อมบำรุงรักษา";
@@ -338,7 +338,7 @@ export async function sendLineTaskNotification(task: WorkScheduleTask, machinery
     const profile = await getEmployeeProfileByName(task.assignedTo);
     if (profile) {
       if (profile.photoUrl) {
-        profilePhotoUrl = ensureValidImageUrl(profile.photoUrl);
+        profilePhotoUrl = ensureValidImageUrl(convertGoogleDriveUrl(profile.photoUrl));
       }
       if (profile.role) {
         profileRole = profile.role;
@@ -347,9 +347,6 @@ export async function sendLineTaskNotification(task: WorkScheduleTask, machinery
   } catch (dbErr) {
     console.warn("Could not query fallback profile photo from database:", dbErr);
   }
-
-  console.log("Profile URL =", profilePhotoUrl);
-  console.log("Hero URL =", verifiedPhotoUrl);
 
   // Fallback if no valid custom photo is present
   let finalHeroPhotoUrl = verifiedPhotoUrl;
@@ -597,7 +594,7 @@ export async function sendLineTaskNotification(task: WorkScheduleTask, machinery
   };
 
   console.log("Profile URL =", profilePhotoUrl);
-  console.log("Hero URL =", verifiedPhotoUrl);
+  console.log("Hero URL =", finalHeroPhotoUrl);
 
   return await pushLineFlexMessage(flexJson);
 }
@@ -627,7 +624,7 @@ export async function sendLineIssuanceNotification(issuance: InventoryIssuance) 
     const profile = await getEmployeeProfileByName(issuance.requestedBy);
     if (profile) {
       if (profile.photoUrl) {
-        profilePhotoUrl = ensureValidImageUrl(profile.photoUrl);
+        profilePhotoUrl = ensureValidImageUrl(convertGoogleDriveUrl(profile.photoUrl));
       }
       if (profile.role) {
         profileRole = profile.role;
@@ -638,8 +635,6 @@ export async function sendLineIssuanceNotification(issuance: InventoryIssuance) 
   }
 
   const verifiedPhotoUrl = "";
-  console.log("Profile URL =", profilePhotoUrl);
-  console.log("Hero URL =", verifiedPhotoUrl);
 
   const hasHeroPhoto = !!profilePhotoUrl;
 
@@ -848,7 +843,7 @@ export async function sendLineIssuanceNotification(issuance: InventoryIssuance) 
   };
 
   console.log("Profile URL =", profilePhotoUrl);
-  console.log("Hero URL =", verifiedPhotoUrl);
+  console.log("Hero URL =", profilePhotoUrl);
 
   return await pushLineFlexMessage(flexJson);
 }
@@ -867,7 +862,7 @@ export async function sendLineStockReceiveNotification(item: StockItem, qtyAdded
     const profile = await getEmployeeProfileByName(receiver);
     if (profile) {
       if (profile.photoUrl) {
-        profilePhotoUrl = ensureValidImageUrl(profile.photoUrl);
+        profilePhotoUrl = ensureValidImageUrl(convertGoogleDriveUrl(profile.photoUrl));
       }
       if (profile.role) {
         profileRole = profile.role;
@@ -878,8 +873,6 @@ export async function sendLineStockReceiveNotification(item: StockItem, qtyAdded
   }
 
   const verifiedPhotoUrl = "";
-  console.log("Profile URL =", profilePhotoUrl);
-  console.log("Hero URL =", verifiedPhotoUrl);
 
   const hasHeroPhoto = !!profilePhotoUrl;
 
@@ -1093,7 +1086,7 @@ export async function sendLineStockReceiveNotification(item: StockItem, qtyAdded
   };
 
   console.log("Profile URL =", profilePhotoUrl);
-  console.log("Hero URL =", verifiedPhotoUrl);
+  console.log("Hero URL =", profilePhotoUrl);
 
   return await pushLineFlexMessage(flexJson);
 }
@@ -1117,7 +1110,7 @@ export async function sendLineRepairNotification(repair: RepairRequest, machiner
     repair.urgency === 'high' ? '🟠 สูง (High)' :
     repair.urgency === 'medium' ? '🟣 ปานกลาง (Medium)' : '🟢 ต่ำ (Low)';
 
-  const verifiedPhotoUrl = ensureValidImageUrl(repair.photoUrl);
+  const verifiedPhotoUrl = repair.photoUrl ? ensureValidImageUrl(convertGoogleDriveUrl(repair.photoUrl)) : "";
 
   let profilePhotoUrl = "";
   let profileRole = "พนักงานแจ้งซ่อม / ปฏิบัติการ";
@@ -1126,7 +1119,7 @@ export async function sendLineRepairNotification(repair: RepairRequest, machiner
     const profile = await getEmployeeProfileByName(repair.reporterName);
     if (profile) {
       if (profile.photoUrl) {
-        profilePhotoUrl = ensureValidImageUrl(profile.photoUrl);
+        profilePhotoUrl = ensureValidImageUrl(convertGoogleDriveUrl(profile.photoUrl));
       }
       if (profile.role) {
         profileRole = profile.role;
@@ -1135,9 +1128,6 @@ export async function sendLineRepairNotification(repair: RepairRequest, machiner
   } catch (dbErr) {
     console.warn("Could not query fallback profile photo from database:", dbErr);
   }
-
-  console.log("Profile URL =", profilePhotoUrl);
-  console.log("Hero URL =", verifiedPhotoUrl);
 
   // Fallback if no valid custom photo is present
   let finalHeroPhotoUrl = verifiedPhotoUrl;
@@ -1351,7 +1341,7 @@ export async function sendLineRepairNotification(repair: RepairRequest, machiner
   };
 
   console.log("Profile URL =", profilePhotoUrl);
-  console.log("Hero URL =", verifiedPhotoUrl);
+  console.log("Hero URL =", finalHeroPhotoUrl);
 
   return await pushLineFlexMessage(flexJson);
 }
@@ -1502,7 +1492,7 @@ export async function sendLineFuelNotification(refuel: RefuelStatus, machinery: 
     refuel.status === 'approved_to_fill' ? '🟡 ผู้อนุมัติไฟเขียว เติมได้ทันที' : '⌛ รอการพิจารณาอนุมัติเติม';
 
   const targetPhoto = refuel.receiptPhotoUrl || refuel.mileagePhoto;
-  const verifiedPhotoUrl = ensureValidImageUrl(targetPhoto);
+  const verifiedPhotoUrl = targetPhoto ? ensureValidImageUrl(convertGoogleDriveUrl(targetPhoto)) : "";
 
   let profilePhotoUrl = "";
   let profileRole = "พนักงานขอรับเชื้อเพลิง / ปฏิบัติการ";
@@ -1511,7 +1501,7 @@ export async function sendLineFuelNotification(refuel: RefuelStatus, machinery: 
     const profile = await getEmployeeProfileByName(refuel.requesterName);
     if (profile) {
       if (profile.photoUrl) {
-        profilePhotoUrl = ensureValidImageUrl(profile.photoUrl);
+        profilePhotoUrl = ensureValidImageUrl(convertGoogleDriveUrl(profile.photoUrl));
       }
       if (profile.role) {
         profileRole = profile.role;
@@ -1520,9 +1510,6 @@ export async function sendLineFuelNotification(refuel: RefuelStatus, machinery: 
   } catch (dbErr) {
     console.warn("Could not query fallback profile photo from database:", dbErr);
   }
-
-  console.log("Profile URL =", profilePhotoUrl);
-  console.log("Hero URL =", verifiedPhotoUrl);
 
   // Fallback if no valid custom photo is present
   let finalHeroPhotoUrl = verifiedPhotoUrl;
@@ -1766,7 +1753,7 @@ export async function sendLineFuelNotification(refuel: RefuelStatus, machinery: 
   };
 
   console.log("Profile URL =", profilePhotoUrl);
-  console.log("Hero URL =", verifiedPhotoUrl);
+  console.log("Hero URL =", finalHeroPhotoUrl);
 
   return await pushLineFlexMessage(flexJson, 'fuel');
 }
@@ -1929,9 +1916,6 @@ export async function sendLineAttendanceNotification(attendance: AttendanceLog) 
   } catch (dbErr) {
     console.warn("Could not query fallback profile photo from database:", dbErr);
   }
-
-  console.log("Profile URL =", profilePhotoUrl);
-  console.log("Hero URL =", verifiedPhotoUrl);
 
   // Fallback if no valid custom photo is present
   if (!verifiedPhotoUrl && profilePhotoUrl) {
