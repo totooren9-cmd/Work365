@@ -9,7 +9,8 @@ import {
   RefuelStatus, 
   ExpenseRecord,
   GoogleDriveUpload,
-  LineSettingItem
+  LineSettingItem,
+  EmployeeProfile
 } from './types';
 import { toUUID } from './utils/uuid';
 
@@ -321,6 +322,10 @@ export async function clearAllAttendances() {
   await supabase.from('work_attendances').delete().neq('employee_name', '');
 }
 
+export async function deleteAttendance(id: string) {
+  await supabase.from('work_attendances').delete().eq('id', toUUID(id));
+}
+
 // 6. MECHANICAL REPAIRS MAPPINGS
 export async function getRepairs(): Promise<RepairRequest[]> {
   const data = await runQuery(supabase.from('repair_requests').select('*'), null);
@@ -543,6 +548,67 @@ export async function saveLineSettingsToDb(item: LineSettingItem) {
     }
   } catch (err: any) {
     console.error("saveLineSettingsToDb error:", err);
+    throw err;
+  }
+}
+
+// 11. EMPLOYEE PROFILE MAPPINGS
+export async function getEmployeeProfiles(): Promise<EmployeeProfile[]> {
+  try {
+    const { data, error } = await supabase.from('employee_profiles').select('*').order('created_at', { ascending: false });
+    if (error) {
+      if (error.code === 'PGRST205' || error.message?.includes('relation "public.employee_profiles" does not exist') || error.message?.includes('relation "employee_profiles" does not exist')) {
+        console.warn('Table employee_profiles not found, using empty array.');
+        return [];
+      }
+      console.warn('Supabase DB Query warning (employee_profiles):', error);
+      return [];
+    }
+    if (!data) return [];
+    return data.map((r: any) => ({
+      id: toUUID(r.id),
+      name: r.name,
+      role: r.role,
+      photoUrl: r.photo_url || '',
+      createdAt: r.created_at
+    }));
+  } catch (err) {
+    console.warn('[Supabase Service] Error loading employee_profiles:', err);
+    return [];
+  }
+}
+
+export async function saveEmployeeProfile(emp: EmployeeProfile) {
+  try {
+    const payload = {
+      id: toUUID(emp.id),
+      name: emp.name,
+      role: emp.role,
+      photo_url: emp.photoUrl
+    };
+    const { error } = await supabase.from('employee_profiles').upsert(payload);
+    if (error) {
+      if (error.code === '42P01' || error.message?.includes('relation "public.employee_profiles" does not exist') || error.message?.includes('relation "employee_profiles" does not exist')) {
+        throw new Error("ตาราง 'employee_profiles' ยังไม่ได้ถูกสร้างในระบบฐานข้อมูล Supabase กรุณานำสคริปต์ SQL ในหน้า 'พิมพ์โครงสร้างฐานข้อมูล (SQL)' ไปรันในหน้า SQL Editor ของ Supabase เพื่อสร้างตารางก่อน");
+      }
+      console.error('Error saving employee profile:', error);
+      throw error;
+    }
+  } catch (err) {
+    console.error('saveEmployeeProfile error:', err);
+    throw err;
+  }
+}
+
+export async function deleteEmployeeProfile(id: string) {
+  try {
+    const { error } = await supabase.from('employee_profiles').delete().eq('id', toUUID(id));
+    if (error) {
+      console.error('Error deleting employee profile:', error);
+      throw error;
+    }
+  } catch (err) {
+    console.error('deleteEmployeeProfile error:', err);
     throw err;
   }
 }

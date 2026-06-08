@@ -230,4 +230,12 @@ export interface LineSettingItem {
   createdAt?: string;
 }
 
+export interface EmployeeProfile {
+  id: string;
+  name: string;
+  role: string;
+  photoUrl: string;
+  createdAt?: string;
+}
+
 

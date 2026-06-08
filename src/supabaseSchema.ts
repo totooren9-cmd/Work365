@@ -191,6 +191,40 @@ INSERT INTO line_settings (module_name, channel_access_token, group_id) VALUES
 ('fallback', '', '')
 ON CONFLICT (module_name) DO NOTHING;
 
+-- 14. Employee Profiles Table (ตารางรายชื่อพนักงานที่ลงทะเบียน)
+CREATE TABLE IF NOT EXISTS employee_profiles (
+    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+    name VARCHAR(150) UNIQUE NOT NULL,
+    role VARCHAR(150) NOT NULL,
+    photo_url TEXT,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc'::text, NOW()) NOT NULL
+);
+
+-- Seed default employees
+INSERT INTO employee_profiles (name, role, photo_url) VALUES
+('Admin2.ชัยนาวิน', 'แอดมินฝ่ายประสานงานกลาง', 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?auto=format&fit=crop&q=80&w=250'),
+('AE.ชัยนาวิน (บิว)', 'เจ้าหน้าที่ฝ่ายประสานงานขาย (AE)', 'https://images.unsplash.com/photo-1541625602330-2277a4c46182?auto=format&fit=crop&q=80&w=250'),
+('BIWTY', 'เจ้าหน้าที่สนับสนุนโครงการ (บิวตี้)', 'https://images.unsplash.com/photo-1524504388940-b1c1722653e1?auto=format&fit=crop&q=80&w=250'),
+('chalwat', 'ช่างเทคนิคและวิศวกรซ่อมคุมงาน', 'https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?auto=format&fit=crop&q=80&w=250'),
+('cnw.นำหน้า', 'โฟร์แมนนำทีมเครื่องจักรชัยนาวิน', 'https://images.unsplash.com/photo-1531746020798-e6953c6e8e04?auto=format&fit=crop&q=80&w=250'),
+('Max', 'หัวหน้าฝ่ายเทคโนโลยีสนาม (แม็กซ์)', 'https://images.unsplash.com/photo-1539571696357-5a69c17a67c6?auto=format&fit=crop&q=80&w=250'),
+('Non. นนทนันท์ 5', 'ผู้ช่วยช่างควบคุมเครื่องเกรดเบอร์ 5', 'https://images.unsplash.com/photo-1586528116311-ad8dd3c8310d?auto=format&fit=crop&q=80&w=250'),
+('Sitthichai. wongdee', 'ช่างคุมระบบไฟฟ้าและเครื่องกำเนิดไฟ', 'https://images.unsplash.com/photo-1519085360753-af0119f7cbe7?auto=format&fit=crop&q=80&w=250'),
+('WAVE', 'ช่างซ่อมบำรุงและเครื่องยนต์ดีเซล', 'https://images.unsplash.com/photo-1514888286974-6c03e2ca1dba?auto=format&fit=crop&q=80&w=250'),
+('^ SONGPON ^', 'ช่างควบคุมเครื่องขุดระดับสูง (ทรงพล)', 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&q=80&w=250'),
+('ช.ชาย เด็กผู้พันตรี', 'ช่างคุมงานตักลานหินบด', 'https://images.unsplash.com/photo-1621905251189-08b45d6a269e?auto=format&fit=crop&q=80&w=250'),
+('ธชัย สระทองเขียว', 'โฟร์แมนควบคุมกะก่อสร้างงานดิน', 'https://images.unsplash.com/photo-1492562080023-ab3db95bfbce?auto=format&fit=crop&q=80&w=250'),
+('นา', 'แอดมินการเงินและตรวจสอบเวลา', 'https://images.unsplash.com/photo-1489980508314-941910ded1f4?auto=format&fit=crop&q=80&w=250'),
+('ยศ', 'เจ้าหน้าที่สโตร์ส่วนภูมิภาค', 'https://images.unsplash.com/photo-1567532939604-b6b5b0db2604?auto=format&fit=crop&q=80&w=250'),
+('สุธา ภูชะหาร', 'ผู้ดูแลกะคนขับรถพ่วงและหัวลาก', 'https://images.unsplash.com/photo-1552374196-1ab2a1c593e8?auto=format&fit=crop&q=80&w=250'),
+('อั้ม. อนุสรณ์', 'ฝ่ายซ่อมบำรุงหนักและยางเครื่องคลาน', 'https://images.unsplash.com/photo-1464746133101-a2c3f88e0dd9?auto=format&fit=crop&q=80&w=250'),
+('เกด 24', 'ผู้จัดการแอดมินบริหารงานบุคคล', 'https://images.unsplash.com/photo-1560250097-0b93528c311a?auto=format&fit=crop&q=80&w=250'),
+('เป๊ก', 'พนักงานขับรถส่งเครื่องจักรกลหนัก', 'https://images.unsplash.com/photo-1558981806-ec527fa84c39?auto=format&fit=crop&q=80&w=250'),
+('เหว่า', 'ช่างเทคนิคซ่อมรถเกรดเดอร์ปูผิว', 'https://images.unsplash.com/photo-1517841905240-472988babdf9?auto=format&fit=crop&q=80&w=250'),
+('๕ กัลยา', 'ฝ่ายจัดการบัญชีเจ้าหนี้ (กัลยา)', 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?auto=format&fit=crop&q=80&w=250'),
+('Benz o Nares', 'วิศวกรควบคุมงานขุดเขื่อนระเบิดหิน', 'https://images.unsplash.com/photo-1542343633-ce7a216222e3?auto=format&fit=crop&q=80&w=250')
+ON CONFLICT (name) DO NOTHING;
+
 -- Indexes for Speed Performance Optimization
 CREATE INDEX idx_mach_status ON heavy_machinery(status);
 CREATE INDEX idx_task_due ON work_schedule_tasks(due_date, status);

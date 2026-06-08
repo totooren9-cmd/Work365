@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { 
   Clock, 
   MapPin, 
@@ -16,38 +16,39 @@ import {
   Camera, 
   Smartphone
 } from 'lucide-react';
-import { AttendanceLog } from '../types';
+import { AttendanceLog, EmployeeProfile } from '../types';
 import { uploadFileAndNotify } from '../utils/lineNotify';
+import { getEmployeeProfiles, saveEmployeeProfile, deleteEmployeeProfile } from '../supabaseService';
 
-const DEFAULT_EMPLOYEE_PRESETS = [
-  { name: 'Art Kitthana(122427)', role: 'ช่างเครื่องกลอาวุโส', photoUrl: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&q=80&w=200' },
-  { name: 'Admin2.ชัยนาวิน', role: 'ผู้ดูแลระบบสำนักงาน', photoUrl: 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?auto=format&fit=crop&q=80&w=200' },
-  { name: 'AE.ชัยนาวิน (บิว)', role: 'ผู้ดูแลหน้างาน/ประสานการผลิต', photoUrl: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=200' },
-  { name: 'B I W T Y 🧸', role: 'เจ้าหน้าที่ธุรการไซต์ประปา', photoUrl: 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=crop&q=80&w=200' },
-  { name: 'chalwat', role: 'ช่างซ่อมบำรุงล้อเลื่อน', photoUrl: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&q=80&w=200' },
-  { name: 'cnw.นำหน้า', role: 'ผู้ควบคุมเครื่องจักรกลหนัก', photoUrl: 'https://images.unsplash.com/photo-1522075469751-3a6694fb2f61?auto=format&fit=crop&q=80&w=200' },
-  { name: 'Max', role: 'โฟร์แมนควบคุมงานโครงสร้าง', photoUrl: 'https://images.unsplash.com/photo-1539571696357-5a69c17a67c6?auto=format&fit=crop&q=80&w=200' },
-  { name: 'Non. นนทนันท์💸 ⚡ 🛡️', role: 'ผู้จัดการแผนกซ่อมบำรุงทั่วไป', photoUrl: 'https://images.unsplash.com/photo-1492562080023-ab3db95bfbce?auto=format&fit=crop&q=80&w=200' },
-  { name: 'Sitthichai. wongdee', role: 'ช่างเทคนิคอาวุโส', photoUrl: 'https://images.unsplash.com/photo-1501196354995-cbb51c65aaea?auto=format&fit=crop&q=80&w=200' },
-  { name: 'WAVE', role: 'วิศวกรเครื่องจักรกลหน้างาน', photoUrl: 'https://images.unsplash.com/photo-1519085360753-af0119f7cbe7?auto=format&fit=crop&q=80&w=200' },
-  { name: '^ SONGPON ^', role: 'ผู้จัดการโครงการเขื่อนชลประทาน', photoUrl: 'https://images.unsplash.com/photo-1534308983496-4fabb1a015ee?auto=format&fit=crop&q=80&w=200' },
-  { name: 'ช.ชาย เด็กผู้พันตรี', role: 'ช่างไฟฟ้าอาวุโสบริการเครื่องจักร', photoUrl: 'https://images.unsplash.com/photo-1489980508314-941910ded1f4?auto=format&fit=crop&q=80&w=200' },
-  { name: 'ธชัย สระทองเขียว', role: 'พนักงานขับรถขนส่งวัสดุหนัก', photoUrl: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?auto=format&fit=crop&q=80&w=200' },
-  { name: 'นำ', role: 'โฟร์แมนอาวุโสตรวจสอบหน้าดิน', photoUrl: 'https://images.unsplash.com/photo-1552058544-f2b08422138a?auto=format&fit=crop&q=80&w=200' },
-  { name: 'ยศ', role: 'ช่างควบคุมระบบปั๊มสูบระบาย', photoUrl: 'https://images.unsplash.com/photo-1560250097-0b93528c311a?auto=format&fit=crop&q=80&w=200' },
-  { name: 'สุธา ภูชะหาร', role: 'ผู้ช่วยผู้รักษาความปลอดภัยประจำกะ', photoUrl: 'https://images.unsplash.com/photo-1488161628813-04466f872be2?auto=format&fit=crop&q=80&w=200' },
-  { name: 'อั้ม. อนุสรณ์', role: 'วิศวกรซ่อมบำรุงระบบหล่อลื่น', photoUrl: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&q=80&w=200' },
-  { name: 'เกด 24 🔑', role: 'เจ้าหน้าที่บริหารความมั่นคงหน้างาน', photoUrl: 'https://images.unsplash.com/photo-1517841905240-472988babdf9?auto=format&fit=crop&q=80&w=200' },
-  { name: 'เป๊ก 🎃', role: 'ช่างขับรถแม็คโคระบบล้อยาง', photoUrl: 'https://images.unsplash.com/photo-1539571696357-5a69c17a67c6?auto=format&fit=crop&q=80&w=200' },
-  { name: 'เหว่า', role: 'พนักงานขับรถแทรกเตอร์ใหญ่ประคองฐาน', photoUrl: 'https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?auto=format&fit=crop&q=80&w=200' },
-  { name: '🌸 กัลยา 🌸', role: 'ผู้จัดการธุรการและบัญชีสนาม', photoUrl: 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=crop&q=80&w=200' },
-  { name: '🔰 Benz ♉ Nares', role: 'วิศวกรโครงสร้างและระบบนิรภัย', photoUrl: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&q=80&w=200' }
+const DEFAULT_EMPLOYEE_PRESETS: { name: string; role: string; photoUrl: string }[] = [
+  { name: 'Admin2.ชัยนาวิน', role: 'แอดมินฝ่ายประสานงานกลาง', photoUrl: 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?auto=format&fit=crop&q=80&w=250' },
+  { name: 'AE.ชัยนาวิน (บิว)', role: 'เจ้าหน้าที่ฝ่ายประสานงานขาย (AE)', photoUrl: 'https://images.unsplash.com/photo-1541625602330-2277a4c46182?auto=format&fit=crop&q=80&w=250' },
+  { name: 'BIWTY', role: 'เจ้าหน้าที่สนับสนุนโครงการ (บิวตี้)', photoUrl: 'https://images.unsplash.com/photo-1524504388940-b1c1722653e1?auto=format&fit=crop&q=80&w=250' },
+  { name: 'chalwat', role: 'ช่างเทคนิคและวิศวกรซ่อมคุมงาน', photoUrl: 'https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?auto=format&fit=crop&q=80&w=250' },
+  { name: 'cnw.นำหน้า', role: 'โฟร์แมนนำทีมเครื่องจักรชัยนาวิน', photoUrl: 'https://images.unsplash.com/photo-1531746020798-e6953c6e8e04?auto=format&fit=crop&q=80&w=250' },
+  { name: 'Max', role: 'หัวหน้าฝ่ายเทคโนโลยีสนาม (แม็กซ์)', photoUrl: 'https://images.unsplash.com/photo-1539571696357-5a69c17a67c6?auto=format&fit=crop&q=80&w=250' },
+  { name: 'Non. นนทนันท์ 5', role: 'ผู้ช่วยช่างควบคุมเครื่องเกรดเบอร์ 5', photoUrl: 'https://images.unsplash.com/photo-1586528116311-ad8dd3c8310d?auto=format&fit=crop&q=80&w=250' },
+  { name: 'Sitthichai. wongdee', role: 'ช่างคุมระบบไฟฟ้าและเครื่องกำเนิดไฟ', photoUrl: 'https://images.unsplash.com/photo-1519085360753-af0119f7cbe7?auto=format&fit=crop&q=80&w=250' },
+  { name: 'WAVE', role: 'ช่างซ่อมบำรุงและเครื่องยนต์ดีเซล', photoUrl: 'https://images.unsplash.com/photo-1514888286974-6c03e2ca1dba?auto=format&fit=crop&q=80&w=250' },
+  { name: '^ SONGPON ^', role: 'ช่างควบคุมเครื่องขุดระดับสูง (ทรงพล)', photoUrl: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&q=80&w=250' },
+  { name: 'ช.ชาย เด็กผู้พันตรี', role: 'ช่างคุมงานตักลานหินบด', photoUrl: 'https://images.unsplash.com/photo-1621905251189-08b45d6a269e?auto=format&fit=crop&q=80&w=250' },
+  { name: 'ธชัย สระทองเขียว', role: 'โฟร์แมนควบคุมกะก่อสร้างงานดิน', photoUrl: 'https://images.unsplash.com/photo-1492562080023-ab3db95bfbce?auto=format&fit=crop&q=80&w=250' },
+  { name: 'นา', role: 'แอดมินการเงินและตรวจสอบเวลา', photoUrl: 'https://images.unsplash.com/photo-1489980508314-941910ded1f4?auto=format&fit=crop&q=80&w=250' },
+  { name: 'ยศ', role: 'เจ้าหน้าที่สโตร์ส่วนภูมิภาค', photoUrl: 'https://images.unsplash.com/photo-1567532939604-b6b5b0db2604?auto=format&fit=crop&q=80&w=250' },
+  { name: 'สุธา ภูชะหาร', role: 'ผู้ดูแลกะคนขับรถพ่วงและหัวลาก', photoUrl: 'https://images.unsplash.com/photo-1552374196-1ab2a1c593e8?auto=format&fit=crop&q=80&w=250' },
+  { name: 'อั้ม. อนุสรณ์', role: 'ฝ่ายซ่อมบำรุงหนักและยางเครื่องคลาน', photoUrl: 'https://images.unsplash.com/photo-1464746133101-a2c3f88e0dd9?auto=format&fit=crop&q=80&w=250' },
+  { name: 'เกด 24', role: 'ผู้จัดการแอดมินบริหารงานบุคคล', photoUrl: 'https://images.unsplash.com/photo-1560250097-0b93528c311a?auto=format&fit=crop&q=80&w=250' },
+  { name: 'เป๊ก', role: 'พนักงานขับรถส่งเครื่องจักรกลหนัก', photoUrl: 'https://images.unsplash.com/photo-1558981806-ec527fa84c39?auto=format&fit=crop&q=80&w=250' },
+  { name: 'เหว่า', role: 'ช่างเทคนิคซ่อมรถเกรดเดอร์ปูผิว', photoUrl: 'https://images.unsplash.com/photo-1517841905240-472988babdf9?auto=format&fit=crop&q=80&w=250' },
+  { name: '๕ กัลยา', role: 'ฝ่ายจัดการบัญชีเจ้าหนี้ (กัลยา)', photoUrl: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?auto=format&fit=crop&q=80&w=250' },
+  { name: 'Benz o Nares', role: 'วิศวกรควบคุมงานขุดเขื่อนระเบิดหิน', photoUrl: 'https://images.unsplash.com/photo-1542343633-ce7a216222e3?auto=format&fit=crop&q=80&w=250' }
 ];
 
 interface AttendanceViewProps {
   attendances: AttendanceLog[];
   onAddAttendance: (log: AttendanceLog) => void;
   onUpdateAttendance: (log: AttendanceLog) => void;
+  onDeleteAttendance: (id: string) => void;
   onClearAllData?: () => void;
 }
 
@@ -55,10 +56,93 @@ export default function AttendanceView({
   attendances, 
   onAddAttendance, 
   onUpdateAttendance,
+  onDeleteAttendance,
   onClearAllData
 }: AttendanceViewProps) {
   const [selectedLogId, setSelectedLogId] = useState<string | null>(attendances[0]?.id || null);
   const [showClockForm, setShowClockForm] = useState(false);
+  const [attendanceSubTab, setAttendanceSubTab] = useState<'scan' | 'register'>('scan');
+
+  // Load dynamically registered employees from localStorage
+  const [registeredEmployees, setRegisteredEmployees] = useState<{ id?: string; name: string; role: string; photoUrl: string }[]>(() => {
+    const saved = localStorage.getItem('cnw-registered-employees');
+    return saved ? JSON.parse(saved) : [];
+  });
+
+  // Fetch registered employees from Supabase on mount
+  useEffect(() => {
+    const fetchRegisteredEmployees = async () => {
+      try {
+        const dbEmps = await getEmployeeProfiles();
+        
+        // Auto-seed to Supabase if any preset is missing from DB
+        const missingPresets = DEFAULT_EMPLOYEE_PRESETS.filter(
+          preset => !dbEmps.some(dbEmp => dbEmp.name === preset.name)
+        );
+
+        if (missingPresets.length > 0) {
+          console.log(`[Supabase Seeding] Autoseeding ${missingPresets.length} missing employee profiles...`);
+          for (let i = 0; i < missingPresets.length; i++) {
+            const preset = missingPresets[i];
+            const cleanId = `PRE-${Date.now().toString().slice(-4)}-${i}`;
+            try {
+              await saveEmployeeProfile({
+                id: cleanId,
+                name: preset.name,
+                role: preset.role,
+                photoUrl: preset.photoUrl
+              });
+            } catch (err) {
+              console.warn(`[Supabase Seeding] Soft failure seeding preset ${preset.name}:`, err);
+            }
+          }
+          // Fetch once again from database to get the clean synchronized set
+          const refreshedDbEmps = await getEmployeeProfiles();
+          const formatted = refreshedDbEmps.map(emp => ({
+            id: emp.id,
+            name: emp.name,
+            role: emp.role,
+            photoUrl: emp.photoUrl
+          }));
+          setRegisteredEmployees(formatted);
+          localStorage.setItem('cnw-registered-employees', JSON.stringify(formatted));
+        } else if (dbEmps && dbEmps.length > 0) {
+          const formatted = dbEmps.map(emp => ({
+            id: emp.id,
+            name: emp.name,
+            role: emp.role,
+            photoUrl: emp.photoUrl
+          }));
+          setRegisteredEmployees(formatted);
+          localStorage.setItem('cnw-registered-employees', JSON.stringify(formatted));
+        }
+      } catch (err) {
+        console.error("Failed to load or auto-seed employee profiles from Supabase on mount:", err);
+      }
+    };
+    fetchRegisteredEmployees();
+  }, []);
+
+  // Load hidden/deleted employee names to locally filter presets and DB records
+  const [hiddenEmployeeNames, setHiddenEmployeeNames] = useState<string[]>(() => {
+    const saved = localStorage.getItem('cnw-hidden-employees');
+    return saved ? JSON.parse(saved) : [];
+  });
+
+  // Custom confirmation states to bypass iframe confirm blocker
+  const [deleteEmpTarget, setDeleteEmpTarget] = useState<string | null>(null);
+  const [deleteLogTarget, setDeleteLogTarget] = useState<{ id: string; name: string } | null>(null);
+  const [deleteClearTarget, setDeleteClearTarget] = useState(false);
+
+  // Profile registration form states
+  const [regName, setRegName] = useState('');
+  const [regRole, setRegRole] = useState('ช่างควบคุมเครื่องจักร/โฟร์แมน');
+  const [regPhoto, setRegPhoto] = useState('https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&q=80&w=150');
+  const [regUseCamera, setRegUseCamera] = useState(false);
+  const [regCameraLoading, setRegCameraLoading] = useState(false);
+  const [regStream, setRegStream] = useState<MediaStream | null>(null);
+
+  const regVideoRef = React.useRef<HTMLVideoElement>(null);
 
   // New check-in state parameters
   const [workName, setWorkName] = useState('');
@@ -103,6 +187,7 @@ export default function AttendanceView({
   const [activeStream, setActiveStream] = useState<MediaStream | null>(null);
   const [gpsLoading, setGpsLoading] = useState(false);
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
+  const [registeringEmployee, setRegisteringEmployee] = useState(false);
 
   // Check-out states
   const [showCheckoutPanel, setShowCheckoutPanel] = useState(false);
@@ -119,19 +204,37 @@ export default function AttendanceView({
   const [editCheckInTime, setEditCheckInTime] = useState('');
   const [editCheckOutTime, setEditCheckOutTime] = useState('');
 
-  // Extract unique employees directory from database records and merge with defaults
+  // Extract unique employees directory from database records and merge with registered staff
   const uniqueEmployees = useMemo(() => {
     const mapList = new Map<string, { name: string; role: string; photoUrl: string }>();
-    DEFAULT_EMPLOYEE_PRESETS.forEach(p => {
-      mapList.set(p.name, p);
-    });
-    attendances.forEach(a => {
-      if (a.employeeName && !mapList.has(a.employeeName)) {
-        mapList.set(a.employeeName, { name: a.employeeName, role: a.role, photoUrl: a.photoUrl });
+    
+    // First priority: Registered employees from local state (saves profile pics correctly)
+    registeredEmployees.forEach(p => {
+      if (!hiddenEmployeeNames.includes(p.name)) {
+        mapList.set(p.name, p);
       }
     });
+
+    // Second: default presets
+    DEFAULT_EMPLOYEE_PRESETS.forEach(p => {
+      if (!hiddenEmployeeNames.includes(p.name)) {
+        mapList.set(p.name, p);
+      }
+    });
+
+    // Third: historical logins from database
+    attendances.forEach(a => {
+      if (a.employeeName && !hiddenEmployeeNames.includes(a.employeeName) && !mapList.has(a.employeeName)) {
+        mapList.set(a.employeeName, { 
+          name: a.employeeName, 
+          role: a.role || 'พนักงานปฏิบัติการทั่วไป', 
+          photoUrl: a.photoUrl || 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=crop&q=80&w=200' 
+        });
+      }
+    });
+
     return Array.from(mapList.values());
-  }, [attendances]);
+  }, [attendances, registeredEmployees, hiddenEmployeeNames]);
 
   // Filter employees based on search query
   const filteredPresetEmployees = useMemo(() => {
@@ -166,11 +269,15 @@ export default function AttendanceView({
   }, [attendances, logFilter]);
 
   const handleClearAllData = () => {
-    if (confirm("🗑️ คุณแน่ใจหรือไม่ว่าต้องการล้างข้อมูลพนักงานและประวัติการทำงานทั้งหมดจากฐานข้อมูล Supabase? การกระทำนี้ไม่สามารถย้อนคืนได้")) {
-      if (onClearAllData) {
-        onClearAllData();
-      }
+    setDeleteClearTarget(true);
+  };
+
+  const confirmClearAllData = () => {
+    if (onClearAllData) {
+      onClearAllData();
     }
+    setDeleteClearTarget(false);
+    alert("🧹 ล้างข้อมูลพนักงานและประวัติการทำงานเรียบร้อยแล้ว!");
   };
 
   // Auto select default name if empty on mounts
@@ -180,7 +287,7 @@ export default function AttendanceView({
       setWorkRole(uniqueEmployees[0].role);
       setPhotoSim(uniqueEmployees[0].photoUrl);
     } else if (!workName) {
-      setWorkName('สมชาย สยามราช');
+      setWorkName('Admin2.ชัยนาวิน');
     }
   }, [uniqueEmployees]);
 
@@ -335,6 +442,220 @@ export default function AttendanceView({
       }
     };
   }, [activeStream]);
+
+  // Staff registration webcam controllers
+  const startRegCamera = async () => {
+    try {
+      setRegCameraLoading(true);
+      if (regStream) {
+        regStream.getTracks().forEach(track => track.stop());
+      }
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: 'user', width: { ideal: 480 }, height: { ideal: 480 } }
+      });
+      setRegStream(stream);
+      setRegUseCamera(true);
+      setRegCameraLoading(false);
+      
+      setTimeout(() => {
+        if (regVideoRef.current) {
+          regVideoRef.current.srcObject = stream;
+        }
+      }, 120);
+    } catch (err: any) {
+      console.error("Staff Registration camera access error:", err);
+      alert(`⚠️ ไม่สามารถสิทธิ์ใช้กล้อง: ${err.message || 'กรุณาเปิดสิทธิ์เข้าถึงอุปกรณ์กล้องถ่ายภาพ'}`);
+      setRegUseCamera(false);
+      setRegCameraLoading(false);
+    }
+  };
+
+  const stopRegCamera = () => {
+    if (regStream) {
+      regStream.getTracks().forEach(track => track.stop());
+      setRegStream(null);
+    }
+    setRegUseCamera(false);
+  };
+
+  const captureRegPhoto = () => {
+    if (!regVideoRef.current) return;
+    try {
+      const canvas = document.createElement('canvas');
+      canvas.width = 480;
+      canvas.height = 480;
+      const ctx = canvas.getContext('2d');
+      if (ctx) {
+        ctx.translate(canvas.width, 0);
+        ctx.scale(-1, 1);
+        ctx.drawImage(regVideoRef.current, 0, 0, 480, 480);
+        const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
+        setRegPhoto(dataUrl);
+        stopRegCamera();
+      }
+    } catch (e) {
+      console.error("Capture custom registration error:", e);
+    }
+  };
+
+  // Cleanup registration camera on unmount
+  React.useEffect(() => {
+    return () => {
+      if (regStream) {
+        regStream.getTracks().forEach(track => track.stop());
+      }
+    };
+  }, [regStream]);
+
+  // File loading reader
+  const handleRegFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.size > 8 * 1024 * 1024) {
+      alert("⚠️ ขนาดไฟล์ภาพใหญ่เกินไป ไม่ควรเกิน 8MB");
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      if (event.target?.result) {
+        setRegPhoto(event.target.result as string);
+      }
+    };
+    reader.readAsDataURL(file);
+  };
+
+  // Submit registered worker profile
+  const handleSaveRegEmployee = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!regName.trim()) {
+      alert("⚠️ กรุณาระบุชื่อ-นามสกุลจริงของพนักงาน");
+      return;
+    }
+    const alreadyExists = registeredEmployees.some(emp => emp.name.toLowerCase().trim() === regName.toLowerCase().trim());
+    if (alreadyExists) {
+      alert(`⚠️ ขออภัย พนักงานชื่อ "${regName.trim()}" ได้ลงทะเบียนไว้ในระบบแล้ว`);
+      return;
+    }
+
+    setRegisteringEmployee(true);
+
+    let finalPhotoUrl = regPhoto;
+    if (regPhoto.startsWith('data:')) {
+      try {
+        const docId = `REG-${Date.now().toString().slice(-4)}`;
+        finalPhotoUrl = await uploadFileAndNotify({
+          image: regPhoto,
+          module: 'ลงทะเบียนพนักงานใหม่',
+          docId,
+          uploadBy: regName.trim(),
+          status: `✨ ลงทะเบียนพนักงานใหม่คนล่าสุด: ตำแหน่ง ${regRole}`
+        });
+      } catch (err) {
+        console.error("Failed to upload registration photo:", err);
+      }
+    } else {
+      // Direct notification if it is an Unsplash mockup image
+      try {
+        const { sendGoogleDriveLineNotification } = await import('../utils/lineNotify');
+        const thaiDate = new Date().toLocaleDateString('th-TH') + ' ' + new Date().toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' }) + ' น.';
+        const docId = `REG-${Date.now().toString().slice(-4)}`;
+        await sendGoogleDriveLineNotification({
+          docId,
+          jobType: 'ลงทะเบียนพนักงานใหม่',
+          operator: regName.trim(),
+          timestamp: thaiDate,
+          status: `✨ ลงทะเบียนพนักงานใหม่คนล่าสุด: ตำแหน่ง ${regRole} (ภาพตัวอย่าง)`,
+          imageUrl: regPhoto
+        });
+      } catch (e) {
+        console.warn("Direct notification for registration failed", e);
+      }
+    }
+
+    const newEmpId = `EMP-${Date.now()}`;
+    const newEmp = {
+      id: newEmpId,
+      name: regName.trim(),
+      role: regRole,
+      photoUrl: finalPhotoUrl
+    };
+
+    try {
+      await saveEmployeeProfile({
+        id: newEmpId,
+        name: newEmp.name,
+        role: newEmp.role,
+        photoUrl: newEmp.photoUrl
+      });
+    } catch (err: any) {
+      console.error("Failed to save employee profile to Supabase:", err);
+      alert(`⚠️ เกิดข้อผิดพลาดในการบันทึกข้อมูลพนักงานลงฐานข้อมูล SQL: ${err.message || err}`);
+    }
+
+    const updated = [newEmp, ...registeredEmployees];
+    setRegisteredEmployees(updated);
+    localStorage.setItem('cnw-registered-employees', JSON.stringify(updated));
+
+    // Clear fields
+    setRegName('');
+    setRegPhoto('https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&q=80&w=150');
+    setRegisteringEmployee(false);
+    
+    alert(`🎉 ลงทะเบียนพนักงานใหม่ "${newEmp.name}" ตำแหน่ง "${newEmp.role}" สำเร็จและยิง LINE พร้อมอัปโหลดรูปขึ้น Google Drive เรียบร้อยแล้ว!`);
+
+    // Auto populate fields in clock-in form for user convenience
+    setWorkName(newEmp.name);
+    setWorkRole(newEmp.role);
+    setPhotoSim(newEmp.photoUrl);
+    setAttendanceSubTab('scan');
+  };
+
+  // Handle delete a registered employee
+  const handleDeleteRegisteredEmployee = (name: string) => {
+    setDeleteEmpTarget(name);
+  };
+
+  const confirmDeleteRegisteredEmployee = async (name: string) => {
+    const empToDelete = registeredEmployees.find(emp => emp.name === name);
+    if (empToDelete && empToDelete.id) {
+      try {
+        await deleteEmployeeProfile(empToDelete.id);
+      } catch (err) {
+        console.error("Failed to delete employee profile from Supabase:", err);
+      }
+    }
+
+    const updated = registeredEmployees.filter(emp => emp.name !== name);
+    setRegisteredEmployees(updated);
+    localStorage.setItem('cnw-registered-employees', JSON.stringify(updated));
+    
+    const newHidden = [...hiddenEmployeeNames, name];
+    setHiddenEmployeeNames(newHidden);
+    localStorage.setItem('cnw-hidden-employees', JSON.stringify(newHidden));
+    
+    alert(`ลบรายชื่อพนักงาน "${name}" เรียบร้อยแล้ว`);
+    if (workName === name) {
+      setWorkName('');
+      setWorkRole('');
+    }
+    setDeleteEmpTarget(null);
+  };
+
+  const handleDeleteAttendanceLog = (logId: string, empName: string) => {
+    setDeleteLogTarget({ id: logId, name: empName });
+  };
+
+  const confirmDeleteAttendanceLog = (logId: string) => {
+    if (onDeleteAttendance) {
+      onDeleteAttendance(logId);
+      if (selectedLogId === logId) {
+        setSelectedLogId(null);
+        setIsEditing(false);
+      }
+      alert('ลบรายการลงเวลาเรียบร้อยแล้ว!');
+    }
+    setDeleteLogTarget(null);
+  };
 
   // Perform Clock check-in Submit
   const handleCheckInSubmit = async (e: React.FormEvent) => {
@@ -557,9 +878,224 @@ export default function AttendanceView({
 
   return (
     <div className="space-y-6">
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6" id="attendance-log-main">
-      {/* 1. Left Logs Cards Panel (8 Columns) */}
-      <div className="lg:col-span-8 bg-stone-50/40 border border-stone-200 rounded-2xl p-5 shadow-sm backdrop-blur-md flex flex-col justify-between">
+      {/* 🧭 Dual-Mode Sub Nav Selector */}
+      <div className="flex bg-[#f5f3eb] p-1 rounded-2xl border border-stone-200 shadow-xs max-w-lg">
+        <button
+          type="button"
+          onClick={() => setAttendanceSubTab('scan')}
+          className={`flex-1 flex items-center justify-center gap-2 py-2 px-3.5 rounded-xl text-xs font-black transition-all cursor-pointer ${
+            attendanceSubTab === 'scan'
+              ? 'bg-gradient-to-tr from-amber-400 to-yellow-300 text-stone-900 shadow-sm border border-stone-200/50'
+              : 'text-stone-500 hover:text-stone-900 hover:bg-stone-100'
+          }`}
+        >
+          <Clock className="w-4 h-4 text-stone-850" />
+          <span>ลงเวลาปฏิบัติงาน (Time Clock)</span>
+        </button>
+        <button
+          type="button"
+          onClick={() => setAttendanceSubTab('register')}
+          className={`flex-1 flex items-center justify-center gap-2 py-2 px-3.5 rounded-xl text-xs font-black transition-all cursor-pointer ${
+            attendanceSubTab === 'register'
+              ? 'bg-gradient-to-tr from-amber-400 to-yellow-300 text-stone-900 shadow-sm border border-stone-200/50'
+              : 'text-stone-500 hover:text-stone-900 hover:bg-stone-100'
+          }`}
+        >
+          <User className="w-4 h-4 text-stone-850" />
+          <span>ลงทะเบียนพนักงาน (Roster Register)</span>
+        </button>
+      </div>
+
+      {attendanceSubTab === 'register' ? (
+        /* 👤 NEW DYNAMIC EMPLOYEE REGISTRATION PAGE */
+        <div className="grid grid-cols-1 md:grid-cols-12 gap-6 animate-fade-in" id="employee-registration-view">
+          {/* Left registration form */}
+          <div className="md:col-span-5 bg-[#fffcf5] p-5 rounded-2xl border border-stone-200 shadow-sm space-y-4">
+            <div>
+              <h2 className="text-sm font-bold text-stone-900 flex items-center gap-1.5 uppercase tracking-wide">
+                👤 ลงทะเบียนพนักงานใหม่ (Staff Register Form)
+              </h2>
+              <p className="text-[10px] text-stone-500">บันทึกชื่อพนักงานใหม่ในสมุดสถิติพร้อมถ่ายรูปใบหน้าเซลฟี่เพื่อยืนยันตัวตนได้ทันที</p>
+            </div>
+
+            <form onSubmit={handleSaveRegEmployee} className="space-y-4">
+              <div>
+                <label className="block text-[10.5px] text-stone-500 font-extrabold mb-1">👤 ชื่อพนักงาน-นามสกุลจริง (Full Name)</label>
+                <input
+                  type="text"
+                  required
+                  value={regName}
+                  onChange={(e) => setRegName(e.target.value)}
+                  placeholder="เช่น สมศักดิ์ ชัยนาวิน, นภาพร ทองคำ"
+                  className="w-full bg-white border border-stone-200 rounded-xl px-3.5 py-2 text-stone-800 outline-none text-xs focus:border-amber-500 shadow-sm font-bold"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[10.5px] text-stone-500 font-extrabold mb-1">🏗️ สายงาน / ตำแหน่งหน้าที่ประจำการ (Position/Role)</label>
+                <select
+                  value={regRole}
+                  onChange={(e) => setRegRole(e.target.value)}
+                  className="w-full bg-white border border-stone-200 rounded-xl px-2.5 py-2 text-stone-850 font-bold outline-none text-xs focus:border-amber-500 shadow-sm"
+                >
+                  <option value="ช่างควบคุมเครื่องจักรยักษ์ใหญ่/แบ็กโฮ">🏗️ ช่างควบคุมเครื่องจักร/แบ็กโฮ</option>
+                  <option value="ช่างรังวัดโครงสร้าง/แผนที่">📐 ช่างรังวัดโครงสร้าง/แผนที่</option>
+                  <option value="วิศวกรความปลอดภัยโยธาสนาม">🚧 วิศวกรความปลอดภัยโยธาสนาม</option>
+                  <option value="โฟร์แมนควบคุมกะทำงาน">🛠️ โฟร์แมนควบคุมกะทำงาน</option>
+                  <option value="เจ้าหน้าที่ธุรการและฝ่ายบุคคลสนาม">📁 เจ้าหน้าที่ธุรการและฝ่ายบุคคล</option>
+                  <option value="พนักงานขับรถพ่วงบรรทุกน้ำ">🚚 พนักงานขับรถบรรทุกวัสดุก่อสร้าง</option>
+                  <option value="ช่างไฟฟ้าเครื่องจักรสนาม">🧩 ช่างไฟฟ้าเครื่องจักรสนาม</option>
+                  <option value="ช่างเชื่อมเหล็กดัดอาวุโส">🔥 ช่างเชื่อมเหล็กดัดอาวุโส</option>
+                  <option value="พนักงานตรวจวัดอุณหภูมิหน้าเขต">👷 พนักงานทั่วไปประจำกอง</option>
+                </select>
+              </div>
+
+              {/* Snap selfie vs file selection upload */}
+              <div className="space-y-2 border-t border-dashed border-stone-200 pt-3">
+                <span className="block text-[10.5px] text-stone-500 font-extrabold">📸 รูปถ่ายประจำตัวพนักงาน (Profile Photo / Webcam / Upload)</span>
+                
+                {regUseCamera ? (
+                  <div className="flex flex-col items-center gap-2 bg-stone-900 p-3 rounded-2xl border border-stone-800">
+                    <div className="relative w-full aspect-square max-w-[240px] rounded-xl overflow-hidden bg-black border border-stone-700">
+                      <video
+                        ref={regVideoRef}
+                        autoPlay
+                        playsInline
+                        className="w-full h-full object-cover shrink-0 scale-x-[-1]"
+                      />
+                      {regCameraLoading && (
+                        <div className="absolute inset-0 flex items-center justify-center bg-stone-950/80">
+                          <span className="text-[10px] text-white animate-pulse">กำลังสื่อสารกับกล้อง...</span>
+                        </div>
+                      )}
+                    </div>
+                    <div className="flex gap-2">
+                      <button
+                        type="button"
+                        onClick={captureRegPhoto}
+                        className="bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] font-bold px-3.5 py-1.5 rounded-xl cursor-pointer"
+                      >
+                        📸 กดถ่ายรูป (Take Photo)
+                      </button>
+                      <button
+                        type="button"
+                        onClick={stopRegCamera}
+                        className="bg-stone-700 hover:bg-stone-650 text-white text-[11px] font-bold px-3 py-1.5 rounded-xl cursor-pointer"
+                      >
+                        ยกเลิก
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    <div className="flex items-center gap-4 bg-stone-100/60 p-3.5 rounded-2xl border border-stone-200 shadow-inner">
+                      <div className="w-14 h-14 rounded-full overflow-hidden border border-stone-300 bg-white shadow-xs shrink-0 relative">
+                        <img src={regPhoto} alt="Roster register avatar" className="w-full h-full object-cover" />
+                      </div>
+                      <div className="flex-1 space-y-1">
+                        <p className="text-[9px] text-stone-500 font-bold leading-tight">ถ่ายรูปสดโดยตรงด้วยกล้องคอมพ์/มือถือ หรือกดอัพโหลดไฟล์ภาพพนักงานจริง</p>
+                        
+                        <div className="flex flex-wrap gap-2 pt-1">
+                          <button
+                            type="button"
+                            onClick={startRegCamera}
+                            className="bg-amber-50 hover:bg-amber-100 text-stone-800 border border-amber-300 px-3 py-1 rounded-xl text-[10px] font-extrabold cursor-pointer transition-all flex items-center gap-1"
+                          >
+                            <Camera className="w-3 h-3 text-amber-600 animate-pulse" />
+                            เปิดกล้องถ่ายรูปสด
+                          </button>
+
+                          <label className="bg-orange-50 hover:bg-orange-100 text-orange-700 border border-orange-200 px-3 py-1 rounded-xl text-[10px] font-extrabold cursor-pointer transition-all flex items-center gap-1 text-center">
+                            📁 เลือกอัพโหลดไฟล์ภาพ
+                            <input
+                              type="file"
+                              accept="image/*"
+                              onChange={handleRegFileChange}
+                              className="hidden"
+                            />
+                          </label>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              <button
+                type="submit"
+                disabled={registeringEmployee}
+                className={`w-full py-3 bg-gradient-to-tr from-amber-400 to-yellow-300 text-stone-900 border border-stone-300 font-black text-xs rounded-xl shadow-xs hover:opacity-90 transition-all cursor-pointer text-center font-sans tracking-wide ${registeringEmployee ? 'opacity-65 cursor-not-allowed' : ''}`}
+              >
+                {registeringEmployee ? '⏳ กำลังบันทึก อัปโหลดขึ้น Google Drive & ส่ง LINE...' : '💾 บันทึกรายชื่อคนงานลงสมุดพนักงาน (Save Profile)'}
+              </button>
+            </form>
+          </div>
+
+          {/* Right registered list */}
+          <div className="md:col-span-7 bg-white p-5 rounded-2xl border border-stone-200 shadow-sm space-y-4">
+            <div className="flex items-center justify-between border-b border-stone-100 pb-3">
+              <div>
+                <h3 className="text-sm font-bold text-stone-900">🗂️ สมุดรายชื่อผู้ปฏิบัติการทั้งหมด ({uniqueEmployees.length} คน)</h3>
+                <p className="text-[10px] text-stone-450">คีย์ชื่อเหล่านี้ไปค้นหา หรือเลือก "⏱️ ตอกเวลา" เพื่อเปิดแผงบันทึกเข้างานด่วน</p>
+              </div>
+            </div>
+
+            {uniqueEmployees.length === 0 ? (
+              <div className="text-center py-20 text-stone-450 bg-stone-50 rounded-2xl border border-dashed border-stone-200 space-y-3">
+                <p className="text-xs font-bold">⚠️ ระบบว่างเปล่า ไม่มีประวัติพนักงานในสมุดกองงาน</p>
+                <p className="text-[10px] text-stone-500">กรุณาระบุชื่อพนักงานที่สมุดลงทะเบียนด้านซ้าย เพื่อทำการลงทะเบียนพนักงานใหม่</p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-h-[460px] overflow-y-auto pr-1 text-left">
+                {uniqueEmployees.map((emp, index) => (
+                  <div 
+                    key={emp.name + index} 
+                    className="flex items-center justify-between p-3 rounded-2xl bg-stone-50 hover:bg-stone-100/40 border border-stone-200/80 transition-all shadow-xs"
+                  >
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div className="w-11 h-11 rounded-full overflow-hidden border border-stone-200 shadow-xs bg-stone-200 shrink-0">
+                        <img src={emp.photoUrl} alt={emp.name} className="w-full h-full object-cover" />
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-xs font-extrabold text-stone-850 truncate leading-tight">{emp.name}</p>
+                        <p className="text-[10px] text-stone-450 font-bold mt-0.5 tracking-wide line-clamp-1">{emp.role}</p>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-1.5 shrink-0 ml-1">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setWorkName(emp.name);
+                          setWorkRole(emp.role);
+                          setPhotoSim(emp.photoUrl);
+                          setAttendanceSubTab('scan');
+                          setShowClockForm(true);
+                        }}
+                        className="text-amber-600 hover:text-amber-800 hover:bg-amber-100/50 p-1 px-2 rounded-lg transition-all cursor-pointer text-[10px] font-black"
+                        title="เลือกคนนี้เพื่อสแกนเวลา"
+                      >
+                        ⏱️ ตอกเวลา
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleDeleteRegisteredEmployee(emp.name)}
+                        className="text-stone-400 hover:text-rose-600 hover:bg-rose-50 p-1 px-1.5 rounded-lg transition-all cursor-pointer text-[10px] font-black"
+                        title="ลบรายชื่อพนักงานนี้"
+                      >
+                        ✕ ลบ
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6" id="attendance-log-main">
+        {/* 1. Left Logs Cards Panel (8 Columns) */}
+        <div className="lg:col-span-8 bg-stone-50/40 border border-stone-200 rounded-2xl p-5 shadow-sm backdrop-blur-md flex flex-col justify-between">
         <div>
           {/* Daily metrics indicators */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3 border-b border-stone-200 pb-5">
@@ -736,8 +1272,15 @@ export default function AttendanceView({
 
                   <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-2 max-h-[190px] overflow-y-auto pr-1">
                     {filteredPresetEmployees.length === 0 ? (
-                      <div className="col-span-full py-4 text-center text-stone-400 text-[10px]">
-                        ไม่พบรายชื่อพนักงานที่ระบุ ยางล้างตัวกรองและลองพิมพ์ใหม่ หรือระบุด้านล่างเองโดยตรง
+                      <div className="col-span-full py-6 text-center text-stone-500 text-[11px] space-y-2">
+                        <p>⚠️ ไม่พบบัญชีพนักงานที่คู่ควรกับการขึ้นทะเบียนหรือค้นหาในระบบ ชัยนาวิน คอนสตรัคชั่น</p>
+                        <button
+                          type="button"
+                          onClick={() => setAttendanceSubTab('register')}
+                          className="text-amber-700 bg-amber-50 hover:bg-amber-100 border border-amber-200 rounded-lg px-3 py-1 font-bold text-[10px] cursor-pointer inline-flex items-center gap-1 transition-all"
+                        >
+                          ➕ คลิกที่นี่เพื่อไปลงทะเบียนพนักงานใหม่พร้อมถ่ายรูปด่วน
+                        </button>
                       </div>
                     ) : (
                       filteredPresetEmployees.map(preset => {
@@ -1520,13 +2063,22 @@ export default function AttendanceView({
                     <span className="text-[9px] text-slate-450 font-mono font-bold uppercase">ID ID: {selectedLog.id}</span>
                     <h3 className="text-sm font-semibold text-stone-800">บิตตอกเวลา: {selectedLog.employeeName}</h3>
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => setIsEditing(true)}
-                    className="flex items-center gap-1 text-[10px] bg-slate-100 hover:bg-slate-205 px-2.5 py-1 rounded-lg border border-stone-200 text-stone-700 font-bold cursor-pointer transition-all shrink-0 animate-bounce"
-                  >
-                    ✏️ แก้ไขข้อมูลรายคน
-                  </button>
+                  <div className="flex gap-1.5 shrink-0">
+                    <button
+                      type="button"
+                      onClick={() => setIsEditing(true)}
+                      className="flex items-center gap-1 text-[10px] bg-slate-100 hover:bg-slate-200 px-2 py-1 rounded-lg border border-stone-200 text-stone-700 font-bold cursor-pointer transition-all shrink-0"
+                    >
+                      ✏️ แก้ไข
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleDeleteAttendanceLog(selectedLog.id, selectedLog.employeeName)}
+                      className="flex items-center gap-1 text-[10px] bg-rose-50 hover:bg-rose-100 px-2 py-1 rounded-lg border border-rose-200 text-rose-705 font-bold cursor-pointer transition-all shrink-0"
+                    >
+                      🗑️ ลบ
+                    </button>
+                  </div>
                 </div>
 
                 {/* Attendance metrics visual card details */}
@@ -1718,6 +2270,7 @@ export default function AttendanceView({
         )}
       </div>
     </div>
+    )}
 
     {/* Table of All Attendance Logs */}
     <div className="bg-white p-6 rounded-3xl border border-stone-200/50 shadow-sm" id="all-attendance-records-table">
@@ -1750,6 +2303,7 @@ export default function AttendanceView({
                 <th className="py-3 px-3">เวลาตอกออก</th>
                 <th className="py-3 px-3">กะพิเศษ (OT)</th>
                 <th className="py-3 px-3">พิกัดดาวเทียม</th>
+                <th className="py-3 px-3 text-right">ดำเนินการ</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-stone-100">
@@ -1798,6 +2352,31 @@ export default function AttendanceView({
                   <td className="py-3 px-3 font-mono text-stone-500 text-[10.5px]">
                     {log.gpsLocIn} {log.gpsLocOut ? `/ ขากลับ: ${log.gpsLocOut}` : ''}
                   </td>
+                  <td className="py-3 px-3 text-right whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
+                    <div className="inline-flex gap-1.5">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setSelectedLogId(log.id);
+                          setIsEditing(true);
+                          const el = document.getElementById("attendance-log-main");
+                          if (el) el.scrollIntoView({ behavior: "smooth" });
+                        }}
+                        className="bg-amber-50 hover:bg-amber-100 border border-amber-200 text-amber-700 px-2 py-1 rounded-lg text-[10px] font-black cursor-pointer transition-all"
+                        title="แก้ไขประวัติแถวนี้"
+                      >
+                        ✏️ แก้ไข
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleDeleteAttendanceLog(log.id, log.employeeName)}
+                        className="bg-rose-50 hover:bg-rose-100 border border-rose-200 text-rose-600 px-2 py-1 rounded-lg text-[10px] font-black cursor-pointer transition-all"
+                        title="ลบประวัติแถวนี้"
+                      >
+                        🗑️ ลบ
+                      </button>
+                    </div>
+                  </td>
                 </tr>
               ))}
             </tbody>
@@ -1805,6 +2384,92 @@ export default function AttendanceView({
         </div>
       )}
     </div>
+
+    {/* CUSTOM CONFIRMATION OVERLAYS */}
+    {(deleteEmpTarget || deleteLogTarget || deleteClearTarget) && (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-stone-900/60 backdrop-blur-xs p-4 animate-fadeIn">
+        <div className="bg-white rounded-3xl border border-stone-200 shadow-xl max-w-sm w-full p-6 text-center space-y-4 animate-scaleUp">
+          <div className="w-12 h-12 bg-rose-50 rounded-full flex items-center justify-center text-rose-600 font-bold mx-auto text-lg">
+            🚨
+          </div>
+          
+          {deleteEmpTarget && (
+            <div className="space-y-2 text-left">
+              <h4 className="text-sm font-black text-stone-900 text-center">ยืนยันการลบรายชื่อพนักงาน?</h4>
+              <p className="text-xs text-stone-500 leading-relaxed text-center">
+                คุณกำลังจะลบพนักงาน <strong className="text-stone-850 font-extrabold">"{deleteEmpTarget}"</strong> ออกจากระบบสมุดรายชื่อพนักงาน
+              </p>
+              <div className="flex gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setDeleteEmpTarget(null)}
+                  className="flex-1 py-2 bg-stone-100 hover:bg-stone-200 text-stone-750 font-bold text-xs rounded-xl transition-all cursor-pointer"
+                >
+                  ยกเลิก
+                </button>
+                <button
+                  type="button"
+                  onClick={() => confirmDeleteRegisteredEmployee(deleteEmpTarget)}
+                  className="flex-1 py-2 bg-rose-600 hover:bg-rose-700 text-white font-extrabold text-xs rounded-xl transition-all cursor-pointer"
+                >
+                  ✓ ยืนยันการลบ
+                </button>
+              </div>
+            </div>
+          )}
+
+          {deleteLogTarget && (
+            <div className="space-y-2 text-left">
+              <h4 className="text-sm font-black text-stone-900 text-center">ยืนยันการลบประวัติตอกเวลา?</h4>
+              <p className="text-xs text-stone-500 leading-relaxed text-center">
+                คุณกำลังจะลบรายการลงเวลาของ <strong className="text-stone-850 font-extrabold">"{deleteLogTarget.name}"</strong> จากประวัติทั้งหมดในฐานข้อมูล
+              </p>
+              <div className="flex gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setDeleteLogTarget(null)}
+                  className="flex-1 py-2 bg-stone-100 hover:bg-stone-200 text-stone-750 font-bold text-xs rounded-xl transition-all cursor-pointer"
+                >
+                  ยกเลิก
+                </button>
+                <button
+                  type="button"
+                  onClick={() => confirmDeleteAttendanceLog(deleteLogTarget.id)}
+                  className="flex-1 py-2 bg-rose-600 hover:bg-rose-700 text-white font-extrabold text-xs rounded-xl transition-all cursor-pointer"
+                >
+                  ✓ ยืนยันการลบ
+                </button>
+              </div>
+            </div>
+          )}
+
+          {deleteClearTarget && (
+            <div className="space-y-2 text-left">
+              <h4 className="text-sm font-black text-stone-900 text-center">ยืนยันการล้างข้อมูลทั้งหมด?</h4>
+              <p className="text-xs text-stone-500 leading-relaxed text-center">
+                ต้องการล้างข้อมูลพนักงานและประวัติการทำงานทั้งหมดในฐานข้อมูล Supabase หรือไม่? (การกระทำนี้จะล้างทุกสถิติและไม่สามารถกู้คืนได้)
+              </p>
+              <div className="flex gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setDeleteClearTarget(false)}
+                  className="flex-1 py-2 bg-stone-100 hover:bg-stone-200 text-stone-750 font-bold text-xs rounded-xl transition-all cursor-pointer"
+                >
+                  ยกเลิก
+                </button>
+                <button
+                  type="button"
+                  onClick={confirmClearAllData}
+                  className="flex-1 py-2 bg-rose-600 hover:bg-rose-700 text-white font-extrabold text-xs rounded-xl transition-all cursor-pointer"
+                >
+                  ✓ ยืนยันล้างระบบ
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    )}
   </div>
   );
 }

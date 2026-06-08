@@ -68,6 +68,7 @@ import {
   getAttendances,
   saveAttendance,
   clearAllAttendances,
+  deleteAttendance,
   getRepairs,
   saveRepair,
   deleteRepair,
@@ -522,6 +523,12 @@ export default function App() {
     });
   };
 
+  const handleDeleteAttendance = (id: string) => {
+    const uuid = toUUID(id);
+    setAttendances(prev => prev.filter(a => a.id !== uuid));
+    deleteAttendance(uuid).catch(err => console.warn("Supabase attendance delete error:", err));
+  };
+
   const handleClearAllAttendance = () => {
     setAttendances([]);
     clearAllAttendances().catch(err => console.warn("Supabase attendance clean error:", err));
@@ -928,6 +935,7 @@ export default function App() {
               attendances={attendances}
               onAddAttendance={handleAddAttendance}
               onUpdateAttendance={handleUpdateAttendance}
+              onDeleteAttendance={handleDeleteAttendance}
               onClearAllData={handleClearAllAttendance}
             />
           )}

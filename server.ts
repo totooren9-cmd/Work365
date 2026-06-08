@@ -215,6 +215,10 @@ async function startServer() {
       // Run Google Drive upload
       const driveResult = await uploadToGoogleDrive(buffer, filename, mimeType, moduleName);
 
+      if (driveResult.success && driveResult.fileId) {
+        photosMap.set(driveResult.fileId, { buffer, mimeType });
+      }
+
       const responsePayload = {
         success: true,
         photoId,
@@ -249,6 +253,58 @@ async function startServer() {
     } catch (error: any) {
       console.error("Serve photo error:", error);
       res.status(500).send("Internal server error");
+    }
+  });
+
+  // GET proxy endpoint to serve the Google Drive photo dynamically so LINE and other clients can fetch it directly
+  app.get("/api/photo-proxy/:fileId", async (req, res) => {
+    try {
+      const fileIdClean = req.params.fileId.replace(/\.[^/.]+$/, ""); // Remove extension like .jpg
+      
+      // Serve from memory cache if available (super fast!)
+      const memoryPhoto = photosMap.get(fileIdClean);
+      if (memoryPhoto) {
+        res.set("Content-Type", memoryPhoto.mimeType);
+        res.set("Cache-Control", "public, max-age=604800"); // Cache for 7 days
+        return res.send(memoryPhoto.buffer);
+      }
+
+      // If not in memory (e.g. server restarted), fetch from Google Drive!
+      const auth = new google.auth.GoogleAuth({
+        scopes: [
+          "https://www.googleapis.com/auth/drive",
+          "https://www.googleapis.com/auth/drive.readonly",
+          "https://www.googleapis.com/auth/drive.file"
+        ]
+      });
+      const drive = google.drive({ version: "v3", auth });
+
+      // Retrieve public file stream
+      const meta = await drive.files.get({
+        fileId: fileIdClean,
+        fields: "mimeType"
+      });
+      const mimeType = meta.data.mimeType || "image/jpeg";
+
+      const driveRes = await drive.files.get(
+        { fileId: fileIdClean, alt: "media" },
+        { responseType: "stream" }
+      );
+
+      res.set("Content-Type", mimeType);
+      res.set("Cache-Control", "public, max-age=604800"); // Cache for 7 days
+      
+      driveRes.data
+        .on("error", (err: any) => {
+          console.error("Photo proxy streaming error:", err);
+          if (!res.headersSent) {
+            res.status(500).send("Error reading from Google Drive");
+          }
+        })
+        .pipe(res);
+    } catch (error: any) {
+      console.error("Serve photo proxy error:", error);
+      res.status(404).send("Photo proxy not found or accessible");
     }
   });
 

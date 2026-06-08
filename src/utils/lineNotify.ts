@@ -207,8 +207,31 @@ export async function pushLineFlexMessage(flexMessage: any, category: 'attendanc
 }
 
 /**
+ * Extracts Google Drive file ID from a URL.
+ */
+export function extractGoogleDriveFileId(url: string | null | undefined): string | null {
+  if (!url) return null;
+  const s = url.trim();
+  
+  // Pattern 1: uc?id=... or open?id=... or open?id=...
+  const idMatch = s.match(/[?&]id=([^&]+)/);
+  if (idMatch && idMatch[1]) {
+    return idMatch[1];
+  }
+  
+  // Pattern 2: /file/d/FILE_ID/...
+  const dMatch = s.match(/\/file\/d\/([a-zA-Z0-9_-]+)/);
+  if (dMatch && dMatch[1]) {
+    return dMatch[1];
+  }
+  
+  return null;
+}
+
+/**
  * Ensures a photo URL is formatted as an absolute HTTPS/HTTP link.
  * If the link is relative, it prepends the application origin.
+ * If the link is a Google Drive URL, it proxies it through our backend (/api/photo-proxy/:id) so LINE can fetch it without redirects.
  * If the link starts with data: or is invalid/missing, it returns empty string to skip sending.
  */
 export function ensureValidImageUrl(url: string | null | undefined): string {
@@ -217,11 +240,19 @@ export function ensureValidImageUrl(url: string | null | undefined): string {
   if (absoluteUrl.startsWith('data:')) {
     return ""; // Base64 data URLs are invalid for LINE Flex
   }
+
+  const appUrl = (typeof window !== 'undefined' && window.location) 
+    ? window.location.origin 
+    : (process.env.APP_URL || "https://ais-dev-v4xmqfyvpohkbt7yv5i5b4-778841450865.asia-southeast1.run.app");
+  const origin = appUrl.endsWith('/') ? appUrl.slice(0, -1) : appUrl;
+
+  // Intercept and proxy Google Drive URLs so LINE CDN can load them as a direct stream
+  const fileId = extractGoogleDriveFileId(absoluteUrl);
+  if (fileId) {
+    return `${origin}/api/photo-proxy/${fileId}.jpg`;
+  }
+
   if (absoluteUrl.startsWith('/')) {
-    const appUrl = (typeof window !== 'undefined' && window.location) 
-      ? window.location.origin 
-      : (process.env.APP_URL || "https://ais-dev-v4xmqfyvpohkbt7yv5i5b4-778841450865.asia-southeast1.run.app");
-    const origin = appUrl.endsWith('/') ? appUrl.slice(0, -1) : appUrl;
     absoluteUrl = `${origin}${absoluteUrl}`;
   }
   if (absoluteUrl.startsWith('http://') || absoluteUrl.startsWith('https://')) {
@@ -2099,9 +2130,8 @@ export async function sendGoogleDriveLineNotification(params: {
     : (process.env.APP_URL || "https://ais-dev-v4xmqfyvpohkbt7yv5i5b4-778841450865.asia-southeast1.run.app");
   
   const actionUrl = `${appUrl}/jobs/${displayId}`;
-  const activeImgUrl = (imageUrl && imageUrl.startsWith("http")) 
-    ? imageUrl
-    : "https://images.unsplash.com/photo-1541625602330-2277a4c46182?auto=format&fit=crop&q=80&w=600";
+  const processedImgUrl = ensureValidImageUrl(imageUrl);
+  const activeImgUrl = processedImgUrl || "https://images.unsplash.com/photo-1541625602330-2277a4c46182?auto=format&fit=crop&q=80&w=600";
 
   const flexJson = {
     "type": "flex",
@@ -2368,13 +2398,23 @@ export async function uploadFileAndNotify(params: {
 
     // Prompt LINE Flex notification
     const thaiDate = new Date().toLocaleDateString('th-TH') + ' ' + new Date().toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' }) + ' น.';
+    
+    // Choose public image URL format for LINE to fetch directly from this container
+    // Google Drive links prompt HTML viewers that LINE CDN can't parse, while our direct route is a pure image stream
+    const appUrl = (typeof window !== 'undefined' && window.location) 
+      ? window.location.origin 
+      : (process.env.APP_URL || "https://ais-dev-v4xmqfyvpohkbt7yv5i5b4-778841450865.asia-southeast1.run.app");
+    const origin = appUrl.endsWith('/') ? appUrl.slice(0, -1) : appUrl;
+    
+    const lineImgUrl = data.photoId ? `${origin}/api/photo/${data.photoId}.jpg` : data.url;
+
     await sendGoogleDriveLineNotification({
       docId,
       jobType: moduleName,
       operator: uploadBy,
       timestamp: thaiDate,
       status,
-      imageUrl: data.url
+      imageUrl: lineImgUrl
     });
 
     return data.url;
