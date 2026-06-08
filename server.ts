@@ -269,42 +269,128 @@ async function startServer() {
         return res.send(memoryPhoto.buffer);
       }
 
-      // If not in memory (e.g. server restarted), fetch from Google Drive!
-      const auth = new google.auth.GoogleAuth({
-        scopes: [
-          "https://www.googleapis.com/auth/drive",
-          "https://www.googleapis.com/auth/drive.readonly",
-          "https://www.googleapis.com/auth/drive.file"
-        ]
-      });
-      const drive = google.drive({ version: "v3", auth });
+      // If not in memory, fetch directly from Google's public high-speed image CDN
+      const targetUrl = `https://lh3.googleusercontent.com/d/${fileIdClean}`;
+      console.log(`[Photo Proxy] Fetching public user content from Drive URL: ${targetUrl}`);
+      
+      const response = await fetch(targetUrl);
+      if (!response.ok) {
+        throw new Error(`Failed to download from Drive CDN. Status: ${response.status}`);
+      }
+      
+      const mimeType = response.headers.get("content-type") || "image/jpeg";
+      const arrayBuffer = await response.arrayBuffer();
+      const buffer = Buffer.from(arrayBuffer);
 
-      // Retrieve public file stream
-      const meta = await drive.files.get({
-        fileId: fileIdClean,
-        fields: "mimeType"
-      });
-      const mimeType = meta.data.mimeType || "image/jpeg";
-
-      const driveRes = await drive.files.get(
-        { fileId: fileIdClean, alt: "media" },
-        { responseType: "stream" }
-      );
+      // Cache in memory for subsequent loads
+      photosMap.set(fileIdClean, { buffer, mimeType });
 
       res.set("Content-Type", mimeType);
       res.set("Cache-Control", "public, max-age=604800"); // Cache for 7 days
-      
-      driveRes.data
-        .on("error", (err: any) => {
-          console.error("Photo proxy streaming error:", err);
-          if (!res.headersSent) {
-            res.status(500).send("Error reading from Google Drive");
-          }
-        })
-        .pipe(res);
+      res.send(buffer);
     } catch (error: any) {
       console.error("Serve photo proxy error:", error);
       res.status(404).send("Photo proxy not found or accessible");
+    }
+  });
+
+  // GET endpoint to list all employee photo files from Google Drive folder
+  app.get("/api/drive-employees", async (req, res) => {
+    try {
+      const GOOGLE_DRIVE_FOLDER_ID = "1yT9jpH63ZZCF-Dt5kz9rjKJfQv1pyC6m";
+      const folderUrl = `https://drive.google.com/drive/folders/${GOOGLE_DRIVE_FOLDER_ID}`;
+      console.log(`[Drive Service] Scraping and parsing public photo folder: ${folderUrl}`);
+
+      const htmlResponse = await fetch(folderUrl, {
+        headers: {
+          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36"
+        }
+      });
+
+      if (!htmlResponse.ok) {
+        throw new Error(`Google Drive folder web request failed: ${htmlResponse.statusText}`);
+      }
+
+      const html = await htmlResponse.text();
+      
+      // Parse file IDs and names using direct matching
+      const r1 = /data-id="([a-zA-Z0-9_-]{25,50})"[^>]*?data-tooltip="([^"]+?)"/g;
+      let match;
+      const files: { id: string; name: string }[] = [];
+      const seenIds = new Set<string>();
+
+      while ((match = r1.exec(html)) !== null) {
+        const [_, id, tooltip] = match;
+        const filename = tooltip.replace(/\s+Image$/, "").trim();
+        const isImage = filename.toLowerCase().match(/\.(jpe?g|png|gif|webp)$/);
+        
+        if (isImage && !seenIds.has(id)) {
+          seenIds.add(id);
+          files.push({ id, name: filename });
+        }
+      }
+
+      console.log(`[Drive Service] Parsed ${files.length} valid employee pictures from public Drive page.`);
+
+      const roleMap: Record<string, string> = {
+        "Admin2.ชัยนาวิน": "แอดมินฝ่ายประสานงานกลาง",
+        "AE.ชัยนาวิน (บิว)": "เจ้าหน้าที่ฝ่ายประสานงานขาย (AE)",
+        "BIWTY": "เจ้าหน้าที่สนับสนุนโครงการ (บิวตี้)",
+        "chalwat": "ช่างเทคนิคและวิศวกรซ่อมคุมงาน",
+        "cnw.นำหน้า": "โฟร์แมนนำทีมเครื่องจักรชัยนาวิน",
+        "Max": "หัวหน้าฝ่ายเทคโนโลยีสนาม (แม็กซ์)",
+        "Non. นนทนันท์ 5": "ผู้ช่วยช่างควบคุมเครื่องเกรดเบอร์ 5",
+        "Sitthichai. wongdee": "ช่างคุมระบบไฟฟ้าและเครื่องกำเนิดไฟ",
+        "WAVE": "ช่างซ่อมบำรุงและเครื่องยนต์ดีเซล",
+        "^ SONGPON ^": "ช่างควบคุมเครื่องขุดระดับสูง (ทรงพล)",
+        "ช.ชาย เด็กผู้พันตรี": "ช่างคุมงานตักลานหินบด",
+        "ธชัย สระทองเขียว": "โฟร์แมนควบคุมกะก่อสร้างงานดิน",
+        "นา": "แอดมินการเงินและตรวจสอบเวลา",
+        "ยศ": "เจ้าหน้าที่สโตร์ส่วนภูมิภาค",
+        "สุธา ภูชะหาร": "ผู้ดูแลกะคนขับรถพ่วงและหัวลาก",
+        "อั้ม. อนุสรณ์": "ฝ่ายซ่อมบำรุงหนักและยางเครื่องคลาน",
+        "เกด 24": "ผู้จัดการแอดมินบริหารงานบุคคล",
+        "เป๊ก": "พนักงานขับรถส่งเครื่องจักรกลหนัก",
+        "เหว่า": "ช่างเทคนิคซ่อมรถเกรดเดอร์ปูผิว",
+        "๕ กัลยา": "ฝ่ายจัดการบัญชีเจ้าหนี้ (กัลยา)",
+        "Benz o Nares": "วิศวกรควบคุมงานขุดเขื่อนระเบิดหิน"
+      };
+
+      function findMatchingRole(filename: string): string {
+        const cleanName = filename.replace(/\.[^/.]+$/, "").trim();
+        if (roleMap[cleanName]) return roleMap[cleanName];
+
+        const normalizedFile = cleanName.toLowerCase().replace(/[^a-zA-Z0-9ก-๙]/g, "");
+        for (const presetName of Object.keys(roleMap)) {
+          const normalizedPreset = presetName.toLowerCase().replace(/[^a-zA-Z0-9ก-๙]/g, "");
+          if (normalizedFile === normalizedPreset || normalizedFile.includes(normalizedPreset) || normalizedPreset.includes(normalizedFile)) {
+            return roleMap[presetName];
+          }
+        }
+        return "พนักงานทั่วไป/ช่างเทคนิค";
+      }
+
+      const employees = files.map(file => {
+        const cleanName = file.name ? file.name.replace(/\.[^/.]+$/, "").trim() : "";
+        const role = findMatchingRole(file.name || "");
+        const photoUrl = `/api/photo-proxy/${file.id}.jpg`;
+        
+        return {
+          id: file.id,
+          name: cleanName,
+          role: role,
+          photoUrl: photoUrl
+        };
+      });
+
+      // Filter out any entries without valid names
+      const validEmployees = employees.filter(e => e.name.length > 0);
+
+      console.log(`[Drive Service] Successfully resolved ${validEmployees.length} employees.`);
+      res.json({ success: true, count: validEmployees.length, employees: validEmployees });
+    } catch (error: any) {
+      console.error("List employees from Google Drive folder failed:", error);
+      res.status(500).json({ success: false, error: error?.message || String(error) });
     }
   });
 

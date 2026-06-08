@@ -17,31 +17,37 @@ import {
   Smartphone
 } from 'lucide-react';
 import { AttendanceLog, EmployeeProfile } from '../types';
-import { uploadFileAndNotify } from '../utils/lineNotify';
+import { uploadFileAndNotify, ensureValidImageUrl } from '../utils/lineNotify';
 import { getEmployeeProfiles, saveEmployeeProfile, deleteEmployeeProfile } from '../supabaseService';
 
+const resolvePhotoUrl = (url: string | null | undefined): string => {
+  if (!url) return '';
+  if (url.startsWith('data:')) return url;
+  return ensureValidImageUrl(url) || url;
+};
+
 const DEFAULT_EMPLOYEE_PRESETS: { name: string; role: string; photoUrl: string }[] = [
-  { name: 'Admin2.ชัยนาวิน', role: 'แอดมินฝ่ายประสานงานกลาง', photoUrl: 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?auto=format&fit=crop&q=80&w=250' },
-  { name: 'AE.ชัยนาวิน (บิว)', role: 'เจ้าหน้าที่ฝ่ายประสานงานขาย (AE)', photoUrl: 'https://images.unsplash.com/photo-1541625602330-2277a4c46182?auto=format&fit=crop&q=80&w=250' },
-  { name: 'BIWTY', role: 'เจ้าหน้าที่สนับสนุนโครงการ (บิวตี้)', photoUrl: 'https://images.unsplash.com/photo-1524504388940-b1c1722653e1?auto=format&fit=crop&q=80&w=250' },
-  { name: 'chalwat', role: 'ช่างเทคนิคและวิศวกรซ่อมคุมงาน', photoUrl: 'https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?auto=format&fit=crop&q=80&w=250' },
-  { name: 'cnw.นำหน้า', role: 'โฟร์แมนนำทีมเครื่องจักรชัยนาวิน', photoUrl: 'https://images.unsplash.com/photo-1531746020798-e6953c6e8e04?auto=format&fit=crop&q=80&w=250' },
-  { name: 'Max', role: 'หัวหน้าฝ่ายเทคโนโลยีสนาม (แม็กซ์)', photoUrl: 'https://images.unsplash.com/photo-1539571696357-5a69c17a67c6?auto=format&fit=crop&q=80&w=250' },
-  { name: 'Non. นนทนันท์ 5', role: 'ผู้ช่วยช่างควบคุมเครื่องเกรดเบอร์ 5', photoUrl: 'https://images.unsplash.com/photo-1586528116311-ad8dd3c8310d?auto=format&fit=crop&q=80&w=250' },
-  { name: 'Sitthichai. wongdee', role: 'ช่างคุมระบบไฟฟ้าและเครื่องกำเนิดไฟ', photoUrl: 'https://images.unsplash.com/photo-1519085360753-af0119f7cbe7?auto=format&fit=crop&q=80&w=250' },
-  { name: 'WAVE', role: 'ช่างซ่อมบำรุงและเครื่องยนต์ดีเซล', photoUrl: 'https://images.unsplash.com/photo-1514888286974-6c03e2ca1dba?auto=format&fit=crop&q=80&w=250' },
-  { name: '^ SONGPON ^', role: 'ช่างควบคุมเครื่องขุดระดับสูง (ทรงพล)', photoUrl: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&q=80&w=250' },
-  { name: 'ช.ชาย เด็กผู้พันตรี', role: 'ช่างคุมงานตักลานหินบด', photoUrl: 'https://images.unsplash.com/photo-1621905251189-08b45d6a269e?auto=format&fit=crop&q=80&w=250' },
-  { name: 'ธชัย สระทองเขียว', role: 'โฟร์แมนควบคุมกะก่อสร้างงานดิน', photoUrl: 'https://images.unsplash.com/photo-1492562080023-ab3db95bfbce?auto=format&fit=crop&q=80&w=250' },
-  { name: 'นา', role: 'แอดมินการเงินและตรวจสอบเวลา', photoUrl: 'https://images.unsplash.com/photo-1489980508314-941910ded1f4?auto=format&fit=crop&q=80&w=250' },
-  { name: 'ยศ', role: 'เจ้าหน้าที่สโตร์ส่วนภูมิภาค', photoUrl: 'https://images.unsplash.com/photo-1567532939604-b6b5b0db2604?auto=format&fit=crop&q=80&w=250' },
-  { name: 'สุธา ภูชะหาร', role: 'ผู้ดูแลกะคนขับรถพ่วงและหัวลาก', photoUrl: 'https://images.unsplash.com/photo-1552374196-1ab2a1c593e8?auto=format&fit=crop&q=80&w=250' },
-  { name: 'อั้ม. อนุสรณ์', role: 'ฝ่ายซ่อมบำรุงหนักและยางเครื่องคลาน', photoUrl: 'https://images.unsplash.com/photo-1464746133101-a2c3f88e0dd9?auto=format&fit=crop&q=80&w=250' },
-  { name: 'เกด 24', role: 'ผู้จัดการแอดมินบริหารงานบุคคล', photoUrl: 'https://images.unsplash.com/photo-1560250097-0b93528c311a?auto=format&fit=crop&q=80&w=250' },
-  { name: 'เป๊ก', role: 'พนักงานขับรถส่งเครื่องจักรกลหนัก', photoUrl: 'https://images.unsplash.com/photo-1558981806-ec527fa84c39?auto=format&fit=crop&q=80&w=250' },
-  { name: 'เหว่า', role: 'ช่างเทคนิคซ่อมรถเกรดเดอร์ปูผิว', photoUrl: 'https://images.unsplash.com/photo-1517841905240-472988babdf9?auto=format&fit=crop&q=80&w=250' },
-  { name: '๕ กัลยา', role: 'ฝ่ายจัดการบัญชีเจ้าหนี้ (กัลยา)', photoUrl: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?auto=format&fit=crop&q=80&w=250' },
-  { name: 'Benz o Nares', role: 'วิศวกรควบคุมงานขุดเขื่อนระเบิดหิน', photoUrl: 'https://images.unsplash.com/photo-1542343633-ce7a216222e3?auto=format&fit=crop&q=80&w=250' }
+  { name: 'Admin2.ชัยนาวิน', role: 'แอดมินฝ่ายประสานงานกลาง', photoUrl: 'https://lh3.googleusercontent.com/d/1bcudWF4nTNviANwVFBq6VY_Xu66wj2Sk' },
+  { name: 'AE.ชัยนาวิน (บิว)', role: 'เจ้าหน้าที่ฝ่ายประสานงานขาย (AE)', photoUrl: 'https://lh3.googleusercontent.com/d/1mKblXYSC_0_Wb3Z7WZpkFtJO_N1GdREI' },
+  { name: 'BIWTY', role: 'เจ้าหน้าที่สนับสนุนโครงการ (บิวตี้)', photoUrl: 'https://lh3.googleusercontent.com/d/1LXmWcpvFbcIRcfg4YUEnyvAymds3eoOb' },
+  { name: 'chalwat', role: 'ช่างเทคนิคและวิศวกรซ่อมคุมงาน', photoUrl: 'https://lh3.googleusercontent.com/d/1DbXeQAQVLtmLFUxesxLGPviQ3H-LpS39' },
+  { name: 'cnw.นำหน้า', role: 'โฟร์แมนนำทีมเครื่องจักรชัยนาวิน', photoUrl: 'https://lh3.googleusercontent.com/d/1ZvIap9es0vnroAxwUKRlrmMMn4osUAWb' },
+  { name: 'Max', role: 'หัวหน้าฝ่ายเทคโนโลยีสนาม (แม็กซ์)', photoUrl: 'https://lh3.googleusercontent.com/d/1B0biaNKp02q3HoC7fjTtLNanuGew3wZc' },
+  { name: 'Non. นนทนันท์ 5', role: 'ผู้ช่วยช่างควบคุมเครื่องเกรดเบอร์ 5', photoUrl: 'https://lh3.googleusercontent.com/d/1tqVDWHXtj-6mRtKzoOH4GtN6sGOmiV6M' },
+  { name: 'Sitthichai. wongdee', role: 'ช่างคุมระบบไฟฟ้าและเครื่องกำเนิดไฟ', photoUrl: 'https://lh3.googleusercontent.com/d/1ryuw12lUHvt38BafCWcQ4h_w-8eS7BXy' },
+  { name: 'WAVE', role: 'ช่างซ่อมบำรุงและเครื่องยนต์ดีเซล', photoUrl: 'https://lh3.googleusercontent.com/d/1dntM-M5EAQjcdFoaeF3_SL_4Jirn-Xbx' },
+  { name: '^ SONGPON ^', role: 'ช่างควบคุมเครื่องขุดระดับสูง (ทรงพล)', photoUrl: 'https://lh3.googleusercontent.com/d/1VGsY8LpGPa9oc7S0pqlTY3YbKmqpHQe6' },
+  { name: 'ช.ชาย เด็กผู้พันตรี', role: 'ช่างคุมงานตักลานหินบด', photoUrl: 'https://lh3.googleusercontent.com/d/1kYaOytzsjZV3AoBIzirZyIFjviUQbfN-' },
+  { name: 'ธชัย สระทองเขียว', role: 'โฟร์แมนควบคุมกะก่อสร้างงานดิน', photoUrl: 'https://lh3.googleusercontent.com/d/1kR9vhMUosSotBDKkkFVOEZrSCKrqQVqa' },
+  { name: 'นา', role: 'แอดมินการเงินและตรวจสอบเวลา', photoUrl: 'https://lh3.googleusercontent.com/d/19sH-pp3yugmL9dqy64AR9lBrm52JeUYI' },
+  { name: 'ยศ', role: 'เจ้าหน้าที่สโตร์ส่วนภูมิภาค', photoUrl: 'https://lh3.googleusercontent.com/d/1t4z7keMSzVuh8SQa8TgdIXbhJ3JaTB9K' },
+  { name: 'สุธา ภูชะหาร', role: 'ผู้ดูแลกะคนขับรถพ่วงและหัวลาก', photoUrl: 'https://lh3.googleusercontent.com/d/1gva87N7o5wJusdGQYXvnRENwkbyprq2J' },
+  { name: 'อั้ม. อนุสรณ์', role: 'ฝ่ายซ่อมบำรุงหนักและยางเครื่องคลาน', photoUrl: 'https://lh3.googleusercontent.com/d/1fnXZtTWIgu6IKg5O67h30oM_Ia0dCY5t' },
+  { name: 'เกด 24', role: 'ผู้จัดการแอดมินบริหารงานบุคคล', photoUrl: 'https://lh3.googleusercontent.com/d/1GVwU8frkvz8I70YnC9wMUsbH_vlKSxj2' },
+  { name: 'เป๊ก', role: 'พนักงานขับรถส่งเครื่องจักรกลหนัก', photoUrl: 'https://lh3.googleusercontent.com/d/1N7_6X_BfZmQ3uNjQPA40VbVbybWBGY9T' },
+  { name: 'เหว่า', role: 'ช่างเทคนิคซ่อมรถเกรดเดอร์ปูผิว', photoUrl: 'https://lh3.googleusercontent.com/d/1i0aRrPrq8dnNaVkSiDI0R15gENxwXGgw' },
+  { name: '๕ กัลยา', role: 'ฝ่ายจัดการบัญชีเจ้าหนี้ (กัลยา)', photoUrl: 'https://lh3.googleusercontent.com/d/1PT5-vmL7ltbuTNhgfOpjMzfJ3M2y8ZK0' },
+  { name: 'Benz o Nares', role: 'วิศวกรควบคุมงานขุดเขื่อนระเบิดหิน', photoUrl: 'https://lh3.googleusercontent.com/d/1Xfl0jyivvVXScFWCrEG4033sMCB3497Y' }
 ];
 
 interface AttendanceViewProps {
@@ -69,44 +75,31 @@ export default function AttendanceView({
     return saved ? JSON.parse(saved) : [];
   });
 
-  // Fetch registered employees from Supabase on mount
+  // Fetch registered employees from Google Drive folder (via Express) or Supabase on mount
   useEffect(() => {
     const fetchRegisteredEmployees = async () => {
       try {
-        const dbEmps = await getEmployeeProfiles();
-        
-        // Auto-seed to Supabase if any preset is missing from DB
-        const missingPresets = DEFAULT_EMPLOYEE_PRESETS.filter(
-          preset => !dbEmps.some(dbEmp => dbEmp.name === preset.name)
-        );
-
-        if (missingPresets.length > 0) {
-          console.log(`[Supabase Seeding] Autoseeding ${missingPresets.length} missing employee profiles...`);
-          for (let i = 0; i < missingPresets.length; i++) {
-            const preset = missingPresets[i];
-            const cleanId = `PRE-${Date.now().toString().slice(-4)}-${i}`;
-            try {
-              await saveEmployeeProfile({
-                id: cleanId,
-                name: preset.name,
-                role: preset.role,
-                photoUrl: preset.photoUrl
-              });
-            } catch (err) {
-              console.warn(`[Supabase Seeding] Soft failure seeding preset ${preset.name}:`, err);
-            }
+        console.log("[AttendanceView] Loading employee profiles from Google Drive folder...");
+        const res = await fetch('/api/drive-employees');
+        if (res.ok) {
+          const data = await res.json();
+          if (data.success && data.employees && data.employees.length > 0) {
+            console.log(`[AttendanceView] Successfully loaded ${data.employees.length} employees from Google Drive.`);
+            const formatted = data.employees.map((emp: any) => ({
+              id: emp.id,
+              name: emp.name,
+              role: emp.role,
+              photoUrl: emp.photoUrl
+            }));
+            setRegisteredEmployees(formatted);
+            localStorage.setItem('cnw-registered-employees', JSON.stringify(formatted));
+            return;
           }
-          // Fetch once again from database to get the clean synchronized set
-          const refreshedDbEmps = await getEmployeeProfiles();
-          const formatted = refreshedDbEmps.map(emp => ({
-            id: emp.id,
-            name: emp.name,
-            role: emp.role,
-            photoUrl: emp.photoUrl
-          }));
-          setRegisteredEmployees(formatted);
-          localStorage.setItem('cnw-registered-employees', JSON.stringify(formatted));
-        } else if (dbEmps && dbEmps.length > 0) {
+        }
+
+        // Soft fallback to Supabase if endpoint fails
+        const dbEmps = await getEmployeeProfiles();
+        if (dbEmps && dbEmps.length > 0) {
           const formatted = dbEmps.map(emp => ({
             id: emp.id,
             name: emp.name,
@@ -117,7 +110,7 @@ export default function AttendanceView({
           localStorage.setItem('cnw-registered-employees', JSON.stringify(formatted));
         }
       } catch (err) {
-        console.error("Failed to load or auto-seed employee profiles from Supabase on mount:", err);
+        console.error("Failed to load employee profiles on mount:", err);
       }
     };
     fetchRegisteredEmployees();
@@ -208,16 +201,16 @@ export default function AttendanceView({
   const uniqueEmployees = useMemo(() => {
     const mapList = new Map<string, { name: string; role: string; photoUrl: string }>();
     
-    // First priority: Registered employees from local state (saves profile pics correctly)
+    // First priority: Registered employees from local state (saves profile pics correctly, loaded from Google Drive!)
     registeredEmployees.forEach(p => {
       if (!hiddenEmployeeNames.includes(p.name)) {
         mapList.set(p.name, p);
       }
     });
 
-    // Second: default presets
+    // Second: default presets (do NOT overwrite registered employees, which have the dynamic Google Drive photoUrls!)
     DEFAULT_EMPLOYEE_PRESETS.forEach(p => {
-      if (!hiddenEmployeeNames.includes(p.name)) {
+      if (!hiddenEmployeeNames.includes(p.name) && !mapList.has(p.name)) {
         mapList.set(p.name, p);
       }
     });
@@ -228,13 +221,55 @@ export default function AttendanceView({
         mapList.set(a.employeeName, { 
           name: a.employeeName, 
           role: a.role || 'พนักงานปฏิบัติการทั่วไป', 
-          photoUrl: a.photoUrl || 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=crop&q=80&w=200' 
+          photoUrl: a.photoUrl || '' 
         });
       }
     });
 
     return Array.from(mapList.values());
   }, [attendances, registeredEmployees, hiddenEmployeeNames]);
+
+  // Helper to render beautiful initials avatar fallback on error/missing photo, keeping Google Drive streams
+  const renderEmployeeAvatar = (name: string, photoUrl: string | undefined, sizeClass = "w-full h-full") => {
+    const resolvedUrl = resolvePhotoUrl(photoUrl);
+    const isMock = !resolvedUrl || resolvedUrl === "" || resolvedUrl.includes("unsplash.com");
+    if (isMock) {
+      const colors = [
+        'bg-slate-500', 'bg-emerald-600', 'bg-amber-600', 
+        'bg-purple-600', 'bg-rose-600', 'bg-indigo-600', 
+        'bg-teal-600', 'bg-orange-600', 'bg-sky-600'
+      ];
+      let sum = 0;
+      for (let i = 0; i < name.length; i++) sum += name.charCodeAt(i);
+      const colorClass = colors[sum % colors.length];
+      const initials = name ? name.replace(/^[^a-zA-Zก-๙]+/, "").substring(0, 2) : "??";
+      
+      return (
+        <div className={`${sizeClass} rounded-full ${colorClass} text-white font-black text-xs flex items-center justify-center shadow-inner tracking-tight select-none uppercase`}>
+          {initials}
+        </div>
+      );
+    }
+
+    return (
+      <img 
+        src={resolvedUrl} 
+        alt={name} 
+        className={`${sizeClass} rounded-full object-cover`}
+        onError={(e) => {
+          // Fallback to initials dynamically if Google Drive image loading fails
+          (e.currentTarget as HTMLImageElement).style.display = "none";
+          const parent = e.currentTarget.parentElement;
+          if (parent && !parent.querySelector('.dynamic-fallback-initials')) {
+            const initialsDiv = document.createElement("div");
+            initialsDiv.className = `dynamic-fallback-initials ${sizeClass} rounded-full bg-stone-500 text-white font-black text-xs flex items-center justify-center shadow-inner tracking-tight select-none uppercase`;
+            initialsDiv.innerText = name ? name.replace(/^[^a-zA-Zก-๙]+/, "").substring(0, 2) : "??";
+            parent.appendChild(initialsDiv);
+          }
+        }}
+      />
+    );
+  };
 
   // Filter employees based on search query
   const filteredPresetEmployees = useMemo(() => {
@@ -1053,8 +1088,8 @@ export default function AttendanceView({
                     className="flex items-center justify-between p-3 rounded-2xl bg-stone-50 hover:bg-stone-100/40 border border-stone-200/80 transition-all shadow-xs"
                   >
                     <div className="flex items-center gap-3 min-w-0">
-                      <div className="w-11 h-11 rounded-full overflow-hidden border border-stone-200 shadow-xs bg-stone-200 shrink-0">
-                        <img src={emp.photoUrl} alt={emp.name} className="w-full h-full object-cover" />
+                      <div className="w-11 h-11 rounded-full border border-stone-200 shadow-xs bg-stone-200 shrink-0 flex items-center justify-center overflow-hidden">
+                        {renderEmployeeAvatar(emp.name, emp.photoUrl, "w-full h-full")}
                       </div>
                       <div className="min-w-0">
                         <p className="text-xs font-extrabold text-stone-850 truncate leading-tight">{emp.name}</p>
@@ -1300,8 +1335,8 @@ export default function AttendanceView({
                                 : 'bg-white border-stone-200 hover:bg-stone-55 hover:bg-stone-100 shadow-xs'
                             }`}
                           >
-                            <div className="relative w-12 h-12 rounded-full overflow-hidden border border-stone-200 mb-1.5 shadow-xs bg-stone-100 flex-shrink-0">
-                              <img src={preset.photoUrl} alt={preset.name} className="w-full h-full object-cover" />
+                            <div className="relative w-12 h-12 rounded-full border border-stone-200 mb-1.5 shadow-xs bg-stone-100 flex-shrink-0 flex items-center justify-center overflow-hidden">
+                              {renderEmployeeAvatar(preset.name, preset.photoUrl, "w-full h-full")}
                               {isSelected && (
                                 <div className="absolute inset-0 bg-orange-500/10 flex items-center justify-center">
                                   <span className="bg-orange-500 text-white rounded-full h-5 w-5 flex items-center justify-center text-[10px] font-black border border-white shadow">
@@ -1663,8 +1698,8 @@ export default function AttendanceView({
                       >
                         <div className="flex items-start gap-3">
                           {/* Avatar preview decoration thumbnail */}
-                          <div className="relative rounded-xl overflow-hidden w-10 h-10 shrink-0 bg-white border border-stone-200">
-                            <img src={log.photoUrl || 'https://images.unsplash.com/photo-1513151233558-d860c5398176'} alt="Staff avatar" className="w-full h-full object-cover" />
+                          <div className="relative rounded-xl w-10 h-10 shrink-0 bg-white border border-stone-200 flex items-center justify-center overflow-hidden">
+                            {renderEmployeeAvatar(log.employeeName, log.photoUrl || '', "w-full h-full")}
                             <span className={`absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full border border-white ${
                               log.checkOutTime ? 'bg-slate-400' : 'bg-emerald-400 animate-pulse'
                             }`}></span>
@@ -1781,7 +1816,7 @@ export default function AttendanceView({
                     <div className="flex items-center gap-3">
                       <div className="w-14 h-14 rounded-xl overflow-hidden bg-white border border-stone-200 shrink-0 relative group">
                         <img 
-                          src={editPhoto || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&q=80&w=150'} 
+                          src={resolvePhotoUrl(editPhoto) || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&q=80&w=150'} 
                           alt="Edit preview" 
                           className="w-full h-full object-cover"
                         />
@@ -2002,7 +2037,7 @@ export default function AttendanceView({
                     ) : (
                       <div className="h-auto p-2.5 rounded-xl border border-stone-200 bg-white flex flex-col items-center justify-center mt-1 space-y-2">
                         <img 
-                          src={checkOutPhoto || selectedLog.photoUrl} 
+                          src={resolvePhotoUrl(checkOutPhoto || selectedLog.photoUrl)} 
                           alt="Selfie capture log checkout" 
                           className="w-16 h-16 rounded-full border border-stone-200 object-cover shadow-sm animate-fade-in" 
                         />
@@ -2085,7 +2120,7 @@ export default function AttendanceView({
                 <div className="bg-white border border-stone-200 p-4 rounded-xl text-[11px] text-stone-600 space-y-2.5 shadow-sm">
                   <div className="flex items-center gap-3">
                     <div className="w-12 h-12 rounded-xl overflow-hidden bg-white border border-stone-200 shrink-0">
-                      <img src={selectedLog.photoUrl} alt="Staff checkin preview" className="w-full h-full object-cover" />
+                      <img src={resolvePhotoUrl(selectedLog.photoUrl)} alt="Staff checkin preview" className="w-full h-full object-cover" />
                     </div>
                     <div>
                       <h4 className="text-xs font-extrabold text-stone-700">{selectedLog.employeeName}</h4>
@@ -2130,7 +2165,7 @@ export default function AttendanceView({
                     </span>
                     <div className="h-24 rounded-xl overflow-hidden relative border border-stone-200 bg-stone-50 flex items-center justify-center">
                       <img 
-                        src={selectedLog.checkOutTime ? (selectedLog.photoUrlOut || selectedLog.photoUrl) : selectedLog.photoUrl} 
+                        src={resolvePhotoUrl(selectedLog.checkOutTime ? (selectedLog.photoUrlOut || selectedLog.photoUrl) : selectedLog.photoUrl)} 
                         alt="Selfie capture log" 
                         className="w-16 h-16 rounded-full border border-stone-200 object-cover shadow" 
                       />
@@ -2317,7 +2352,7 @@ export default function AttendanceView({
                 >
                   <td className="py-3 px-3 shrink-0">
                     <div className="w-9 h-9 rounded-lg overflow-hidden border border-stone-200 bg-stone-100">
-                      <img src={log.photoUrl} alt="Selfie" className="w-full h-full object-cover" />
+                      <img src={resolvePhotoUrl(log.photoUrl)} alt="Selfie" className="w-full h-full object-cover" />
                     </div>
                   </td>
                   <td className="py-3 px-3 font-bold text-stone-800">

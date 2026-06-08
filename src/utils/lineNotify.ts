@@ -246,10 +246,10 @@ export function ensureValidImageUrl(url: string | null | undefined): string {
     : (process.env.APP_URL || "https://ais-dev-v4xmqfyvpohkbt7yv5i5b4-778841450865.asia-southeast1.run.app");
   const origin = appUrl.endsWith('/') ? appUrl.slice(0, -1) : appUrl;
 
-  // Intercept and proxy Google Drive URLs so LINE CDN can load them as a direct stream
+  // Intercept and resolve Google Drive URLs to their high-speed public CDN format
   const fileId = extractGoogleDriveFileId(absoluteUrl);
   if (fileId) {
-    return `${origin}/api/photo-proxy/${fileId}.jpg`;
+    return `https://lh3.googleusercontent.com/d/${fileId}`;
   }
 
   if (absoluteUrl.startsWith('/')) {
@@ -314,6 +314,10 @@ export async function sendLineTaskNotification(task: WorkScheduleTask, machinery
     ? task.employees.join(', ')
     : (task.assignedTo || 'ไม่ได้ระบุ');
 
+  const firstPhoto = task.photoUrls && task.photoUrls.length > 0 ? task.photoUrls[0] : null;
+  const verifiedPhotoUrl = ensureValidImageUrl(firstPhoto);
+  const hasValidPhotoUrl = !!verifiedPhotoUrl;
+
   const flexJson = {
     "type": "flex",
     "altText": `📅 แจ้งเตือนตารางงานใหม่: ${task.title}`,
@@ -342,6 +346,15 @@ export async function sendLineTaskNotification(task: WorkScheduleTask, machinery
           }
         ]
       },
+      ...(hasValidPhotoUrl ? {
+        "hero": {
+          "type": "image",
+          "url": verifiedPhotoUrl,
+          "size": "full",
+          "aspectRatio": "20:13",
+          "aspectMode": "cover"
+        }
+      } : {}),
       "body": {
         "type": "box",
         "layout": "vertical",
@@ -876,6 +889,9 @@ export async function sendLineRepairNotification(repair: RepairRequest, machiner
     repair.urgency === 'high' ? '🟠 สูง (High)' :
     repair.urgency === 'medium' ? '🟣 ปานกลาง (Medium)' : '🟢 ต่ำ (Low)';
 
+  const verifiedPhotoUrl = ensureValidImageUrl(repair.photoUrl);
+  const hasValidPhotoUrl = !!verifiedPhotoUrl;
+
   const flexJson = {
     "type": "flex",
     "altText": `🚨 แจ้งซ่อมเครื่องจักรฉุกเฉิน: ${machineryCode}`,
@@ -904,6 +920,15 @@ export async function sendLineRepairNotification(repair: RepairRequest, machiner
           }
         ]
       },
+      ...(hasValidPhotoUrl ? {
+        "hero": {
+          "type": "image",
+          "url": verifiedPhotoUrl,
+          "size": "full",
+          "aspectRatio": "20:13",
+          "aspectMode": "cover"
+        }
+      } : {}),
       "body": {
         "type": "box",
         "layout": "vertical",
@@ -1180,6 +1205,10 @@ export async function sendLineFuelNotification(refuel: RefuelStatus, machinery: 
     refuel.status === 'cancelled' ? '🔴 ยกเลิกคำขอแล้ว' :
     refuel.status === 'approved_to_fill' ? '🟡 ผู้อนุมัติไฟเขียว เติมได้ทันที' : '⌛ รอการพิจารณาอนุมัติเติม';
 
+  const targetPhoto = refuel.receiptPhotoUrl || refuel.mileagePhoto;
+  const verifiedPhotoUrl = ensureValidImageUrl(targetPhoto);
+  const hasValidPhotoUrl = !!verifiedPhotoUrl;
+
   const flexJson = {
     "type": "flex",
     "altText": `⛽ ใบคำขอเบิกน้ำมันเชื้อเพลิงเลขที่: ${refuel.documentNo}`,
@@ -1209,6 +1238,15 @@ export async function sendLineFuelNotification(refuel: RefuelStatus, machinery: 
           }
         ]
       },
+      ...(hasValidPhotoUrl ? {
+        "hero": {
+          "type": "image",
+          "url": verifiedPhotoUrl,
+          "size": "full",
+          "aspectRatio": "20:13",
+          "aspectMode": "cover"
+        }
+      } : {}),
       "body": {
         "type": "box",
         "layout": "vertical",
@@ -1515,7 +1553,24 @@ export async function sendLineAttendanceNotification(attendance: AttendanceLog) 
   const timeLabel = isCheckOut ? `เวลาออกงาน: ${attendance.checkOutTime}` : `เวลาเข้างาน: ${attendance.checkInTime}`;
 
   const targetPhoto = isCheckOut ? (attendance.photoUrlOut || attendance.photoUrl) : attendance.photoUrl;
-  const verifiedPhotoUrl = ensureValidImageUrl(targetPhoto);
+  let verifiedPhotoUrl = ensureValidImageUrl(targetPhoto);
+
+  let profilePhotoUrl = "";
+  try {
+    const { getEmployeeProfileByName } = await import('../supabaseService');
+    const profile = await getEmployeeProfileByName(attendance.employeeName);
+    if (profile && profile.photoUrl) {
+      profilePhotoUrl = ensureValidImageUrl(profile.photoUrl);
+    }
+  } catch (dbErr) {
+    console.warn("Could not query fallback profile photo from database:", dbErr);
+  }
+
+  // Fallback if no valid custom photo is present
+  if (!verifiedPhotoUrl && profilePhotoUrl) {
+    verifiedPhotoUrl = profilePhotoUrl;
+  }
+
   const hasValidPhotoUrl = !!verifiedPhotoUrl;
 
   const gpsString = isCheckOut ? (attendance.gpsLocOut || '') : (attendance.gpsLocIn || '');
@@ -1551,26 +1606,20 @@ export async function sendLineAttendanceNotification(attendance: AttendanceLog) 
           }
         ]
       },
+      ...(hasValidPhotoUrl ? {
+        "hero": {
+          "type": "image",
+          "url": verifiedPhotoUrl,
+          "size": "full",
+          "aspectRatio": "20:13",
+          "aspectMode": "cover"
+        }
+      } : {}),
       "body": {
         "type": "box",
         "layout": "vertical",
         "paddingAll": "xl",
         "contents": [
-          ...(hasValidPhotoUrl ? [
-            {
-              "type": "image",
-              "url": verifiedPhotoUrl,
-              "size": "full",
-              "aspectRatio": "1.51:1",
-              "aspectMode": "cover",
-              "margin": "none"
-            },
-            {
-              "type": "separator",
-              "margin": "md",
-              "color": "#f1f5f9"
-            }
-          ] : []),
           {
             "type": "box",
             "layout": "horizontal",
@@ -1598,13 +1647,42 @@ export async function sendLineAttendanceNotification(attendance: AttendanceLog) 
             "color": "#f1f5f9"
           },
           {
-            "type": "text",
-            "text": `พนักงาน: ${attendance.employeeName}`,
-            "weight": "bold",
-            "size": "md",
-            "color": "#0f172a",
+            "type": "box",
+            "layout": "horizontal",
             "margin": "md",
-            "wrap": true
+            "spacing": "md",
+            "alignItems": "center",
+            "contents": [
+              ...(profilePhotoUrl ? [{
+                "type": "image",
+                "url": profilePhotoUrl,
+                "size": "xs",
+                "aspectMode": "cover",
+                "aspectRatio": "1:1",
+                "cornerRadius": "xxl"
+              }] : []),
+              {
+                "type": "box",
+                "layout": "vertical",
+                "contents": [
+                  {
+                    "type": "text",
+                    "text": `${attendance.employeeName}`,
+                    "weight": "bold",
+                    "size": "md",
+                    "color": "#0f172a",
+                    "wrap": true
+                  },
+                  {
+                    "type": "text",
+                    "text": attendance.role || 'ช่างควบคุมเครื่องจักร',
+                    "size": "xs",
+                    "color": "#64748b",
+                    "wrap": true
+                  }
+                ]
+              }
+            ]
           },
           {
             "type": "box",
@@ -1793,6 +1871,7 @@ export async function sendLineExpenseNotification(expense: ExpenseRecord) {
     expense.category === 'rent' ? '🏢 ค่าเช่าเครื่องจักร/สถานที่ (Rent)' : '📦 รายจ่ายอื่น ๆ (Other)';
 
   const validatedReceiptPhoto = ensureValidImageUrl(expense.receiptPhoto);
+  const hasValidPhotoUrl = !!validatedReceiptPhoto;
 
   const flexJson = {
     "type": "flex",
@@ -1822,26 +1901,20 @@ export async function sendLineExpenseNotification(expense: ExpenseRecord) {
           }
         ]
       },
+      ...(hasValidPhotoUrl ? {
+        "hero": {
+          "type": "image",
+          "url": validatedReceiptPhoto,
+          "size": "full",
+          "aspectRatio": "20:13",
+          "aspectMode": "cover"
+        }
+      } : {}),
       "body": {
         "type": "box",
         "layout": "vertical",
         "paddingAll": "xl",
         "contents": [
-          ...(validatedReceiptPhoto ? [
-            {
-              "type": "image",
-              "url": validatedReceiptPhoto,
-              "size": "full",
-              "aspectRatio": "1.51:1",
-              "aspectMode": "cover",
-              "margin": "none"
-            },
-            {
-              "type": "separator",
-              "margin": "md",
-              "color": "#f1f5f9"
-            }
-          ] : []),
           {
             "type": "box",
             "layout": "horizontal",

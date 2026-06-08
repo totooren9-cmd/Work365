@@ -578,6 +578,23 @@ export async function getEmployeeProfiles(): Promise<EmployeeProfile[]> {
   }
 }
 
+export async function getEmployeeProfileByName(name: string): Promise<EmployeeProfile | null> {
+  try {
+    const { data, error } = await supabase.from('employee_profiles').select('*').eq('name', name).maybeSingle();
+    if (error || !data) return null;
+    return {
+      id: toUUID(data.id),
+      name: data.name,
+      role: data.role,
+      photoUrl: data.photo_url || '',
+      createdAt: data.created_at
+    };
+  } catch (err) {
+    console.warn('[Supabase Service] Error loading employee_profile by name:', err);
+    return null;
+  }
+}
+
 export async function saveEmployeeProfile(emp: EmployeeProfile) {
   try {
     const payload = {
