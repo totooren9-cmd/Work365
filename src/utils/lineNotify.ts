@@ -213,7 +213,7 @@ export function extractGoogleDriveFileId(url: string | null | undefined): string
   if (!url) return null;
   const s = url.trim();
   
-  // Pattern 1: uc?id=... or open?id=... or open?id=...
+  // Pattern 1: uc?id=... or open?id=...
   const idMatch = s.match(/[?&]id=([^&]+)/);
   if (idMatch && idMatch[1]) {
     return idMatch[1];
@@ -223,6 +223,18 @@ export function extractGoogleDriveFileId(url: string | null | undefined): string
   const dMatch = s.match(/\/file\/d\/([a-zA-Z0-9_-]+)/);
   if (dMatch && dMatch[1]) {
     return dMatch[1];
+  }
+
+  // Pattern 3: /api/photo-proxy/FILE_ID...
+  const proxyMatch = s.match(/\/api\/photo-proxy\/([a-zA-Z0-9_-]+)/);
+  if (proxyMatch && proxyMatch[1]) {
+    return proxyMatch[1];
+  }
+
+  // Pattern 4: lh3.googleusercontent.com/d/FILE_ID...
+  const lh3Match = s.match(/lh3\.googleusercontent\.com\/d\/([a-zA-Z0-9_-]+)/);
+  if (lh3Match && lh3Match[1]) {
+    return lh3Match[1];
   }
   
   return null;
@@ -255,10 +267,11 @@ export function ensureValidImageUrl(url: string | null | undefined): string {
   // Convert custom Google Drive formats
   absoluteUrl = convertGoogleDriveUrl(absoluteUrl);
 
-  // Intercept and resolve Google Drive URLs to their high-speed public CDN format
+  // Intercept and resolve Google Drive URLs to their high-speed public CDN format (lh3.googleusercontent.com)
+  // This responds with direct 200 OK without 302 redirects, which LINE Flex requires
   const fileId = extractGoogleDriveFileId(absoluteUrl);
   if (fileId) {
-    return `https://drive.google.com/uc?export=view&id=${fileId}`;
+    return `https://lh3.googleusercontent.com/d/${fileId}`;
   }
 
   const appUrl = (typeof window !== 'undefined' && window.location) 
