@@ -229,6 +229,17 @@ export function extractGoogleDriveFileId(url: string | null | undefined): string
 }
 
 /**
+ * Converts Google Drive URLs containing /d/ to the direct view format with export=view.
+ */
+export function convertGoogleDriveUrl(url: string): string {
+  const match = url.match(/\/d\/([^/]+)/);
+  if (match) {
+    return `https://drive.google.com/uc?export=view&id=${match[1]}`;
+  }
+  return url;
+}
+
+/**
  * Ensures a photo URL is formatted as an absolute HTTPS/HTTP link.
  * If the link is relative, it prepends the application origin.
  * If the link is a Google Drive URL, it proxies it through our backend (/api/photo-proxy/:id) so LINE can fetch it without redirects.
@@ -241,16 +252,19 @@ export function ensureValidImageUrl(url: string | null | undefined): string {
     return ""; // Base64 data URLs are invalid for LINE Flex
   }
 
-  const appUrl = (typeof window !== 'undefined' && window.location) 
-    ? window.location.origin 
-    : (process.env.APP_URL || "https://ais-dev-v4xmqfyvpohkbt7yv5i5b4-778841450865.asia-southeast1.run.app");
-  const origin = appUrl.endsWith('/') ? appUrl.slice(0, -1) : appUrl;
+  // Convert custom Google Drive formats
+  absoluteUrl = convertGoogleDriveUrl(absoluteUrl);
 
   // Intercept and resolve Google Drive URLs to their high-speed public CDN format
   const fileId = extractGoogleDriveFileId(absoluteUrl);
   if (fileId) {
-    return `https://lh3.googleusercontent.com/d/${fileId}`;
+    return `https://drive.google.com/uc?export=view&id=${fileId}`;
   }
+
+  const appUrl = (typeof window !== 'undefined' && window.location) 
+    ? window.location.origin 
+    : (process.env.APP_URL || "https://ais-dev-v4xmqfyvpohkbt7yv5i5b4-778841450865.asia-southeast1.run.app");
+  const origin = appUrl.endsWith('/') ? appUrl.slice(0, -1) : appUrl;
 
   if (absoluteUrl.startsWith('/')) {
     absoluteUrl = `${origin}${absoluteUrl}`;
@@ -316,7 +330,34 @@ export async function sendLineTaskNotification(task: WorkScheduleTask, machinery
 
   const firstPhoto = task.photoUrls && task.photoUrls.length > 0 ? task.photoUrls[0] : null;
   const verifiedPhotoUrl = ensureValidImageUrl(firstPhoto);
-  const hasValidPhotoUrl = !!verifiedPhotoUrl;
+
+  let profilePhotoUrl = "";
+  let profileRole = "ช่างอุทยาน / ซ่อมบำรุงรักษา";
+  try {
+    const { getEmployeeProfileByName } = await import('../supabaseService');
+    const profile = await getEmployeeProfileByName(task.assignedTo);
+    if (profile) {
+      if (profile.photoUrl) {
+        profilePhotoUrl = ensureValidImageUrl(profile.photoUrl);
+      }
+      if (profile.role) {
+        profileRole = profile.role;
+      }
+    }
+  } catch (dbErr) {
+    console.warn("Could not query fallback profile photo from database:", dbErr);
+  }
+
+  console.log("Profile URL =", profilePhotoUrl);
+  console.log("Hero URL =", verifiedPhotoUrl);
+
+  // Fallback if no valid custom photo is present
+  let finalHeroPhotoUrl = verifiedPhotoUrl;
+  if (!finalHeroPhotoUrl && profilePhotoUrl) {
+    finalHeroPhotoUrl = profilePhotoUrl;
+  }
+
+  const hasHeroPhoto = !!finalHeroPhotoUrl;
 
   const flexJson = {
     "type": "flex",
@@ -332,7 +373,7 @@ export async function sendLineTaskNotification(task: WorkScheduleTask, machinery
         "contents": [
           {
             "type": "text",
-            "text": "📅 มอบหมายแผนงานป...",
+            "text": "📅 มอบหมายแผนงานปฏิบัติการ",
             "weight": "bold",
             "color": "#ffffff",
             "size": "lg"
@@ -346,10 +387,10 @@ export async function sendLineTaskNotification(task: WorkScheduleTask, machinery
           }
         ]
       },
-      ...(hasValidPhotoUrl ? {
+      ...(hasHeroPhoto ? {
         "hero": {
           "type": "image",
-          "url": verifiedPhotoUrl,
+          "url": finalHeroPhotoUrl,
           "size": "full",
           "aspectRatio": "20:13",
           "aspectMode": "cover"
@@ -417,6 +458,44 @@ export async function sendLineTaskNotification(task: WorkScheduleTask, machinery
                 "contents": [
                   { "type": "text", "text": "ช่างผู้ทำงาน", "size": "sm", "color": "#64748b" },
                   { "type": "text", "text": task.assignedTo || 'ไม่ได้ระบุ', "size": "sm", "color": "#1e293b", "align": "end", "weight": "bold" }
+                ]
+              }
+            ]
+          },
+          {
+            "type": "box",
+            "layout": "horizontal",
+            "margin": "xl",
+            "spacing": "md",
+            "alignItems": "center",
+            "contents": [
+              ...(profilePhotoUrl ? [{
+                "type": "image",
+                "url": profilePhotoUrl,
+                "size": "xs",
+                "aspectMode": "cover",
+                "aspectRatio": "1:1",
+                "cornerRadius": "xxl"
+              }] : []),
+              {
+                "type": "box",
+                "layout": "vertical",
+                "contents": [
+                  {
+                    "type": "text",
+                    "text": `${task.assignedTo || 'ไม่ได้ระบุ'}`,
+                    "weight": "bold",
+                    "size": "md",
+                    "color": "#0f172a",
+                    "wrap": true
+                  },
+                  {
+                    "type": "text",
+                    "text": profileRole,
+                    "size": "xs",
+                    "color": "#64748b",
+                    "wrap": true
+                  }
                 ]
               }
             ]
@@ -517,6 +596,9 @@ export async function sendLineTaskNotification(task: WorkScheduleTask, machinery
     }
   };
 
+  console.log("Profile URL =", profilePhotoUrl);
+  console.log("Hero URL =", verifiedPhotoUrl);
+
   return await pushLineFlexMessage(flexJson);
 }
 
@@ -537,6 +619,29 @@ export async function sendLineIssuanceNotification(issuance: InventoryIssuance) 
   const statusText = 
     isApproved ? '🟢 อนุมัติการเบิกจ่ายแล้ว (Approved)' :
     isRejected ? '🔴 ปฏิเสธคำขอเบิกแล้ว (Rejected)' : '🟡 รออนุมัติการเบิกจ่ายพัสดุ';
+
+  let profilePhotoUrl = "";
+  let profileRole = "พนักงานขอเบิกพัสดุ / เจ้าหน้าที่";
+  try {
+    const { getEmployeeProfileByName } = await import('../supabaseService');
+    const profile = await getEmployeeProfileByName(issuance.requestedBy);
+    if (profile) {
+      if (profile.photoUrl) {
+        profilePhotoUrl = ensureValidImageUrl(profile.photoUrl);
+      }
+      if (profile.role) {
+        profileRole = profile.role;
+      }
+    }
+  } catch (dbErr) {
+    console.warn("Could not query fallback profile photo from database:", dbErr);
+  }
+
+  const verifiedPhotoUrl = "";
+  console.log("Profile URL =", profilePhotoUrl);
+  console.log("Hero URL =", verifiedPhotoUrl);
+
+  const hasHeroPhoto = !!profilePhotoUrl;
 
   const flexJson = {
     "type": "flex",
@@ -567,6 +672,15 @@ export async function sendLineIssuanceNotification(issuance: InventoryIssuance) 
           }
         ]
       },
+      ...(hasHeroPhoto ? {
+        "hero": {
+          "type": "image",
+          "url": profilePhotoUrl,
+          "size": "full",
+          "aspectRatio": "20:13",
+          "aspectMode": "cover"
+        }
+      } : {}),
       "body": {
         "type": "box",
         "layout": "vertical",
@@ -639,6 +753,44 @@ export async function sendLineIssuanceNotification(issuance: InventoryIssuance) 
           },
           {
             "type": "box",
+            "layout": "horizontal",
+            "margin": "xl",
+            "spacing": "md",
+            "alignItems": "center",
+            "contents": [
+              ...(profilePhotoUrl ? [{
+                "type": "image",
+                "url": profilePhotoUrl,
+                "size": "xs",
+                "aspectMode": "cover",
+                "aspectRatio": "1:1",
+                "cornerRadius": "xxl"
+              }] : []),
+              {
+                "type": "box",
+                "layout": "vertical",
+                "contents": [
+                  {
+                    "type": "text",
+                    "text": `${issuance.requestedBy}`,
+                    "weight": "bold",
+                    "size": "md",
+                    "color": "#0f172a",
+                    "wrap": true
+                  },
+                  {
+                    "type": "text",
+                    "text": profileRole,
+                    "size": "xs",
+                    "color": "#64748b",
+                    "wrap": true
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "type": "box",
             "layout": "vertical",
             "margin": "xl",
             "contents": [
@@ -695,6 +847,9 @@ export async function sendLineIssuanceNotification(issuance: InventoryIssuance) 
     }
   };
 
+  console.log("Profile URL =", profilePhotoUrl);
+  console.log("Hero URL =", verifiedPhotoUrl);
+
   return await pushLineFlexMessage(flexJson);
 }
 
@@ -704,6 +859,29 @@ export async function sendLineIssuanceNotification(issuance: InventoryIssuance) 
 export async function sendLineStockReceiveNotification(item: StockItem, qtyAdded: number, source: string, receiver: string) {
   const formattedDate = new Date().toLocaleDateString('th-TH');
   const formattedTime = new Date().toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+
+  let profilePhotoUrl = "";
+  let profileRole = "เจ้าหน้าที่คลังพัสดุ / ตรวจรับ";
+  try {
+    const { getEmployeeProfileByName } = await import('../supabaseService');
+    const profile = await getEmployeeProfileByName(receiver);
+    if (profile) {
+      if (profile.photoUrl) {
+        profilePhotoUrl = ensureValidImageUrl(profile.photoUrl);
+      }
+      if (profile.role) {
+        profileRole = profile.role;
+      }
+    }
+  } catch (dbErr) {
+    console.warn("Could not query fallback profile photo from database:", dbErr);
+  }
+
+  const verifiedPhotoUrl = "";
+  console.log("Profile URL =", profilePhotoUrl);
+  console.log("Hero URL =", verifiedPhotoUrl);
+
+  const hasHeroPhoto = !!profilePhotoUrl;
 
   const flexJson = {
     "type": "flex",
@@ -719,7 +897,7 @@ export async function sendLineStockReceiveNotification(item: StockItem, qtyAdded
         "contents": [
           {
             "type": "text",
-            "text": "📥 น้ำเข้าคลังอะไหล่ (Stock Received)",
+            "text": "📥 นำเข้าคลังอะไหล่ (Stock Received)",
             "weight": "bold",
             "color": "#ffffff",
             "size": "lg"
@@ -733,6 +911,15 @@ export async function sendLineStockReceiveNotification(item: StockItem, qtyAdded
           }
         ]
       },
+      ...(hasHeroPhoto ? {
+        "hero": {
+          "type": "image",
+          "url": profilePhotoUrl,
+          "size": "full",
+          "aspectRatio": "20:13",
+          "aspectMode": "cover"
+        }
+      } : {}),
       "body": {
         "type": "box",
         "layout": "vertical",
@@ -805,6 +992,44 @@ export async function sendLineStockReceiveNotification(item: StockItem, qtyAdded
           },
           {
             "type": "box",
+            "layout": "horizontal",
+            "margin": "xl",
+            "spacing": "md",
+            "alignItems": "center",
+            "contents": [
+              ...(profilePhotoUrl ? [{
+                "type": "image",
+                "url": profilePhotoUrl,
+                "size": "xs",
+                "aspectMode": "cover",
+                "aspectRatio": "1:1",
+                "cornerRadius": "xxl"
+              }] : []),
+              {
+                "type": "box",
+                "layout": "vertical",
+                "contents": [
+                  {
+                    "type": "text",
+                    "text": `${receiver || 'ไม่ได้ระบุ'}`,
+                    "weight": "bold",
+                    "size": "md",
+                    "color": "#0f172a",
+                    "wrap": true
+                  },
+                  {
+                    "type": "text",
+                    "text": profileRole,
+                    "size": "xs",
+                    "color": "#64748b",
+                    "wrap": true
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "type": "box",
             "layout": "vertical",
             "margin": "xl",
             "contents": [
@@ -867,6 +1092,9 @@ export async function sendLineStockReceiveNotification(item: StockItem, qtyAdded
     }
   };
 
+  console.log("Profile URL =", profilePhotoUrl);
+  console.log("Hero URL =", verifiedPhotoUrl);
+
   return await pushLineFlexMessage(flexJson);
 }
 
@@ -890,7 +1118,34 @@ export async function sendLineRepairNotification(repair: RepairRequest, machiner
     repair.urgency === 'medium' ? '🟣 ปานกลาง (Medium)' : '🟢 ต่ำ (Low)';
 
   const verifiedPhotoUrl = ensureValidImageUrl(repair.photoUrl);
-  const hasValidPhotoUrl = !!verifiedPhotoUrl;
+
+  let profilePhotoUrl = "";
+  let profileRole = "พนักงานแจ้งซ่อม / ปฏิบัติการ";
+  try {
+    const { getEmployeeProfileByName } = await import('../supabaseService');
+    const profile = await getEmployeeProfileByName(repair.reporterName);
+    if (profile) {
+      if (profile.photoUrl) {
+        profilePhotoUrl = ensureValidImageUrl(profile.photoUrl);
+      }
+      if (profile.role) {
+        profileRole = profile.role;
+      }
+    }
+  } catch (dbErr) {
+    console.warn("Could not query fallback profile photo from database:", dbErr);
+  }
+
+  console.log("Profile URL =", profilePhotoUrl);
+  console.log("Hero URL =", verifiedPhotoUrl);
+
+  // Fallback if no valid custom photo is present
+  let finalHeroPhotoUrl = verifiedPhotoUrl;
+  if (!finalHeroPhotoUrl && profilePhotoUrl) {
+    finalHeroPhotoUrl = profilePhotoUrl;
+  }
+
+  const hasHeroPhoto = !!finalHeroPhotoUrl;
 
   const flexJson = {
     "type": "flex",
@@ -920,10 +1175,10 @@ export async function sendLineRepairNotification(repair: RepairRequest, machiner
           }
         ]
       },
-      ...(hasValidPhotoUrl ? {
+      ...(hasHeroPhoto ? {
         "hero": {
           "type": "image",
-          "url": verifiedPhotoUrl,
+          "url": finalHeroPhotoUrl,
           "size": "full",
           "aspectRatio": "20:13",
           "aspectMode": "cover"
@@ -993,6 +1248,44 @@ export async function sendLineRepairNotification(repair: RepairRequest, machiner
           },
           {
             "type": "box",
+            "layout": "horizontal",
+            "margin": "xl",
+            "spacing": "md",
+            "alignItems": "center",
+            "contents": [
+              ...(profilePhotoUrl ? [{
+                "type": "image",
+                "url": profilePhotoUrl,
+                "size": "xs",
+                "aspectMode": "cover",
+                "aspectRatio": "1:1",
+                "cornerRadius": "xxl"
+              }] : []),
+              {
+                "type": "box",
+                "layout": "vertical",
+                "contents": [
+                  {
+                    "type": "text",
+                    "text": `${repair.reporterName}`,
+                    "weight": "bold",
+                    "size": "md",
+                    "color": "#0f172a",
+                    "wrap": true
+                  },
+                  {
+                    "type": "text",
+                    "text": profileRole,
+                    "size": "xs",
+                    "color": "#64748b",
+                    "wrap": true
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "type": "box",
             "layout": "vertical",
             "margin": "xl",
             "contents": [
@@ -1056,6 +1349,9 @@ export async function sendLineRepairNotification(repair: RepairRequest, machiner
       }
     }
   };
+
+  console.log("Profile URL =", profilePhotoUrl);
+  console.log("Hero URL =", verifiedPhotoUrl);
 
   return await pushLineFlexMessage(flexJson);
 }
@@ -1207,7 +1503,34 @@ export async function sendLineFuelNotification(refuel: RefuelStatus, machinery: 
 
   const targetPhoto = refuel.receiptPhotoUrl || refuel.mileagePhoto;
   const verifiedPhotoUrl = ensureValidImageUrl(targetPhoto);
-  const hasValidPhotoUrl = !!verifiedPhotoUrl;
+
+  let profilePhotoUrl = "";
+  let profileRole = "พนักงานขอรับเชื้อเพลิง / ปฏิบัติการ";
+  try {
+    const { getEmployeeProfileByName } = await import('../supabaseService');
+    const profile = await getEmployeeProfileByName(refuel.requesterName);
+    if (profile) {
+      if (profile.photoUrl) {
+        profilePhotoUrl = ensureValidImageUrl(profile.photoUrl);
+      }
+      if (profile.role) {
+        profileRole = profile.role;
+      }
+    }
+  } catch (dbErr) {
+    console.warn("Could not query fallback profile photo from database:", dbErr);
+  }
+
+  console.log("Profile URL =", profilePhotoUrl);
+  console.log("Hero URL =", verifiedPhotoUrl);
+
+  // Fallback if no valid custom photo is present
+  let finalHeroPhotoUrl = verifiedPhotoUrl;
+  if (!finalHeroPhotoUrl && profilePhotoUrl) {
+    finalHeroPhotoUrl = profilePhotoUrl;
+  }
+
+  const hasHeroPhoto = !!finalHeroPhotoUrl;
 
   const flexJson = {
     "type": "flex",
@@ -1238,10 +1561,10 @@ export async function sendLineFuelNotification(refuel: RefuelStatus, machinery: 
           }
         ]
       },
-      ...(hasValidPhotoUrl ? {
+      ...(hasHeroPhoto ? {
         "hero": {
           "type": "image",
-          "url": verifiedPhotoUrl,
+          "url": finalHeroPhotoUrl,
           "size": "full",
           "aspectRatio": "20:13",
           "aspectMode": "cover"
@@ -1305,6 +1628,44 @@ export async function sendLineFuelNotification(refuel: RefuelStatus, machinery: 
                 "contents": [
                   { "type": "text", "text": "พนักงานลงชื่อขอกราบเบิก", "size": "sm", "color": "#64748b" },
                   { "type": "text", "text": refuel.requesterName, "size": "sm", "color": "#111827", "align": "end", "weight": "bold" }
+                ]
+              }
+            ]
+          },
+          {
+            "type": "box",
+            "layout": "horizontal",
+            "margin": "xl",
+            "spacing": "md",
+            "alignItems": "center",
+            "contents": [
+              ...(profilePhotoUrl ? [{
+                "type": "image",
+                "url": profilePhotoUrl,
+                "size": "xs",
+                "aspectMode": "cover",
+                "aspectRatio": "1:1",
+                "cornerRadius": "xxl"
+              }] : []),
+              {
+                "type": "box",
+                "layout": "vertical",
+                "contents": [
+                  {
+                    "type": "text",
+                    "text": `${refuel.requesterName}`,
+                    "weight": "bold",
+                    "size": "md",
+                    "color": "#0f172a",
+                    "wrap": true
+                  },
+                  {
+                    "type": "text",
+                    "text": profileRole,
+                    "size": "xs",
+                    "color": "#64748b",
+                    "wrap": true
+                  }
                 ]
               }
             ]
@@ -1403,6 +1764,9 @@ export async function sendLineFuelNotification(refuel: RefuelStatus, machinery: 
       }
     }
   };
+
+  console.log("Profile URL =", profilePhotoUrl);
+  console.log("Hero URL =", verifiedPhotoUrl);
 
   return await pushLineFlexMessage(flexJson, 'fuel');
 }
@@ -1553,18 +1917,21 @@ export async function sendLineAttendanceNotification(attendance: AttendanceLog) 
   const timeLabel = isCheckOut ? `เวลาออกงาน: ${attendance.checkOutTime}` : `เวลาเข้างาน: ${attendance.checkInTime}`;
 
   const targetPhoto = isCheckOut ? (attendance.photoUrlOut || attendance.photoUrl) : attendance.photoUrl;
-  let verifiedPhotoUrl = ensureValidImageUrl(targetPhoto);
+  let verifiedPhotoUrl = targetPhoto ? ensureValidImageUrl(convertGoogleDriveUrl(targetPhoto)) : "";
 
   let profilePhotoUrl = "";
   try {
     const { getEmployeeProfileByName } = await import('../supabaseService');
     const profile = await getEmployeeProfileByName(attendance.employeeName);
     if (profile && profile.photoUrl) {
-      profilePhotoUrl = ensureValidImageUrl(profile.photoUrl);
+      profilePhotoUrl = ensureValidImageUrl(convertGoogleDriveUrl(profile.photoUrl));
     }
   } catch (dbErr) {
     console.warn("Could not query fallback profile photo from database:", dbErr);
   }
+
+  console.log("Profile URL =", profilePhotoUrl);
+  console.log("Hero URL =", verifiedPhotoUrl);
 
   // Fallback if no valid custom photo is present
   if (!verifiedPhotoUrl && profilePhotoUrl) {
@@ -1854,6 +2221,9 @@ export async function sendLineAttendanceNotification(attendance: AttendanceLog) 
       }
     }
   };
+
+  console.log("Profile URL =", profilePhotoUrl);
+  console.log("Hero URL =", verifiedPhotoUrl);
 
   return await pushLineFlexMessage(flexJson, 'attendance');
 }

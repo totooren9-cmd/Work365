@@ -81,11 +81,34 @@ export default function AttendanceView({
       try {
         console.log("[AttendanceView] Loading employee profiles from Google Drive folder...");
         const res = await fetch('/api/drive-employees');
-        if (res.ok) {
-          const data = await res.json();
-          if (data.success && data.employees && data.employees.length > 0) {
-            console.log(`[AttendanceView] Successfully loaded ${data.employees.length} employees from Google Drive.`);
-            const formatted = data.employees.map((emp: any) => ({
+        let loadedFromDrive = false;
+        
+        if (res.ok && res.headers.get('content-type')?.includes('application/json')) {
+          try {
+            const data = await res.json();
+            if (data.success && data.employees && data.employees.length > 0) {
+              console.log(`[AttendanceView] Successfully loaded ${data.employees.length} employees from Google Drive.`);
+              const formatted = data.employees.map((emp: any) => ({
+                id: emp.id,
+                name: emp.name,
+                role: emp.role,
+                photoUrl: emp.photoUrl
+              }));
+              setRegisteredEmployees(formatted);
+              localStorage.setItem('cnw-registered-employees', JSON.stringify(formatted));
+              loadedFromDrive = true;
+            }
+          } catch (jsonErr) {
+            console.warn("[AttendanceView] Failed to parse drive employees JSON response, falling back to database:", jsonErr);
+          }
+        }
+
+        if (!loadedFromDrive) {
+          // Soft fallback to Supabase if endpoint fails or returns non-JSON/empty
+          console.log("[AttendanceView] Falling back to Supabase loading...");
+          const dbEmps = await getEmployeeProfiles();
+          if (dbEmps && dbEmps.length > 0) {
+            const formatted = dbEmps.map(emp => ({
               id: emp.id,
               name: emp.name,
               role: emp.role,
@@ -93,21 +116,7 @@ export default function AttendanceView({
             }));
             setRegisteredEmployees(formatted);
             localStorage.setItem('cnw-registered-employees', JSON.stringify(formatted));
-            return;
           }
-        }
-
-        // Soft fallback to Supabase if endpoint fails
-        const dbEmps = await getEmployeeProfiles();
-        if (dbEmps && dbEmps.length > 0) {
-          const formatted = dbEmps.map(emp => ({
-            id: emp.id,
-            name: emp.name,
-            role: emp.role,
-            photoUrl: emp.photoUrl
-          }));
-          setRegisteredEmployees(formatted);
-          localStorage.setItem('cnw-registered-employees', JSON.stringify(formatted));
         }
       } catch (err) {
         console.error("Failed to load employee profiles on mount:", err);
