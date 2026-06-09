@@ -15,16 +15,56 @@ import {
 import { toUUID } from './utils/uuid';
 
 // GRACEFUL EXCEPTION & TABLE VERIFICATION WRAPPER
-async function runQuery<T>(queryPromise: any, fallback: T): Promise<T> {
+async function runQuery<T>(queryPromise: any, fallback: T, tableName?: string): Promise<T> {
+  let computedTable = tableName || 'unknown';
+  if (!computedTable || computedTable === 'unknown') {
+    try {
+      if (queryPromise && typeof queryPromise.url === 'object' && queryPromise.url instanceof URL) {
+        const pathParts = queryPromise.url.pathname.split('/');
+        computedTable = pathParts[pathParts.length - 1] || 'unknown';
+      } else if (queryPromise && typeof queryPromise.url === 'string') {
+        const urlStr = queryPromise.url;
+        const index = urlStr.indexOf('/rest/v1/');
+        if (index !== -1) {
+          computedTable = urlStr.substring(index + 9).split('?')[0];
+        } else {
+          const parts = urlStr.split('/');
+          computedTable = parts[parts.length - 1].split('?')[0];
+        }
+      }
+    } catch (e) {
+      // ignore helper error
+    }
+  }
+
+  const startTime = Date.now();
+  console.log(`📡 [Supabase DEBUG Query] Fetching data from: "${computedTable}"...`);
+  
   try {
-    const { data, error } = await queryPromise;
+    const { data, error, status, statusText } = await queryPromise;
+    const duration = Date.now() - startTime;
+    
     if (error) {
-      console.warn('Supabase DB Query warning:', error);
+      console.error(`❌ [Supabase DEBUG Query Error] Failed to fetch table "${computedTable}" (${duration}ms):`, {
+        code: error.code,
+        message: error.message,
+        details: error.details,
+        hint: error.hint,
+        httpStatusCode: status,
+        httpStatusText: statusText
+      });
       return fallback;
     }
+    
+    const count = Array.isArray(data) ? data.length : (data ? 1 : 0);
+    console.log(`✅ [Supabase DEBUG Query Success] Table "${computedTable}" fetched successfully in ${duration}ms! Status: ${status} (${statusText || 'OK'}). Retrieved ${count} rows.`);
     return data || fallback;
-  } catch (err) {
-    console.error('Supabase DB Exception:', err);
+  } catch (err: any) {
+    const duration = Date.now() - startTime;
+    console.error(`🚨 [Supabase DEBUG Query Exception] Fatal exception fetching table "${computedTable}" (${duration}ms):`, {
+      message: err?.message || String(err),
+      stack: err?.stack
+    });
     return fallback;
   }
 }
@@ -606,36 +646,74 @@ export async function getEmployeeProfileByName(name: string): Promise<EmployeePr
 }
 
 export async function saveEmployeeProfile(emp: EmployeeProfile) {
+  const startTime = Date.now();
+  const payload = {
+    id: toUUID(emp.id),
+    name: emp.name,
+    role: emp.role,
+    photo_url: emp.photoUrl
+  };
+  
+  console.log(`📡 [Supabase DEBUG Mutation Initiated] saveEmployeeProfile calling upsert...`, {
+    action: 'SAVE_EMPLOYEE_PROFILE',
+    payloadCleaned: { id: payload.id, name: payload.name, role: payload.role, hasPhoto: !!payload.photo_url }
+  });
+
   try {
-    const payload = {
-      id: toUUID(emp.id),
-      name: emp.name,
-      role: emp.role,
-      photo_url: emp.photoUrl
-    };
-    const { error } = await supabase.from('employee_profiles').upsert(payload);
+    const { error, status, statusText } = await supabase.from('employee_profiles').upsert(payload);
+    const duration = Date.now() - startTime;
+
     if (error) {
+      console.error(`❌ [Supabase DEBUG Mutation Error] Fail to save employee profile in "${duration}ms" with status ${status} (${statusText}):`, {
+        code: error.code,
+        message: error.message,
+        details: error.details,
+        hint: error.hint
+      });
+
       if (error.code === '42P01' || error.message?.includes('relation "public.employee_profiles" does not exist') || error.message?.includes('relation "employee_profiles" does not exist')) {
         throw new Error("ตาราง 'employee_profiles' ยังไม่ได้ถูกสร้างในระบบฐานข้อมูล Supabase กรุณานำสคริปต์ SQL ในหน้า 'พิมพ์โครงสร้างฐานข้อมูล (SQL)' ไปรันในหน้า SQL Editor ของ Supabase เพื่อสร้างตารางก่อน");
       }
-      console.error('Error saving employee profile:', error);
       throw error;
     }
-  } catch (err) {
-    console.error('saveEmployeeProfile error:', err);
+
+    console.log(`✅ [Supabase DEBUG Mutation Success] Employee profile saved to Supabase in "${duration}ms" with status ${status}. Name: "${emp.name}"`);
+  } catch (err: any) {
+    const duration = Date.now() - startTime;
+    console.error(`🚨 [Supabase DEBUG Mutation Exception] Fatal exception saving employee profile in "${duration}ms":`, {
+      message: err?.message || String(err),
+      stack: err?.stack
+    });
     throw err;
   }
 }
 
 export async function deleteEmployeeProfile(id: string) {
+  const startTime = Date.now();
+  const uuid = toUUID(id);
+  console.log(`📡 [Supabase DEBUG Mutation Initiated] deleteEmployeeProfile for ID: "${uuid}"`);
+
   try {
-    const { error } = await supabase.from('employee_profiles').delete().eq('id', toUUID(id));
+    const { error, status, statusText } = await supabase.from('employee_profiles').delete().eq('id', uuid);
+    const duration = Date.now() - startTime;
+
     if (error) {
-      console.error('Error deleting employee profile:', error);
+      console.error(`❌ [Supabase DEBUG Mutation Error] Fail to delete employee profile in "${duration}ms" with status ${status}:`, {
+        code: error.code,
+        message: error.message,
+        details: error.details,
+        hint: error.hint
+      });
       throw error;
     }
-  } catch (err) {
-    console.error('deleteEmployeeProfile error:', err);
+
+    console.log(`✅ [Supabase DEBUG Mutation Success] Employee profile ID "${uuid}" deleted in "${duration}ms" with status ${status}.`);
+  } catch (err: any) {
+    const duration = Date.now() - startTime;
+    console.error(`🚨 [Supabase DEBUG Mutation Exception] Fatal exception deleting employee profile in "${duration}ms":`, {
+      message: err?.message || String(err),
+      stack: err?.stack
+    });
     throw err;
   }
 }
