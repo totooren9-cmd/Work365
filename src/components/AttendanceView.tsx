@@ -75,48 +75,58 @@ export default function AttendanceView({
     return saved ? JSON.parse(saved) : [];
   });
 
-  // Fetch registered employees from Google Drive folder (via Express) or Supabase on mount
+  // Fetch registered employees from Google Drive folder (via Express) and merge with Supabase database on mount
   useEffect(() => {
     const fetchRegisteredEmployees = async () => {
       try {
         console.log("[AttendanceView] Loading employee profiles from Google Drive folder...");
         const res = await fetch('/api/drive-employees');
-        let loadedFromDrive = false;
+        let driveEmps: any[] = [];
         
         if (res.ok && res.headers.get('content-type')?.includes('application/json')) {
           try {
             const data = await res.json();
             if (data.success && data.employees && data.employees.length > 0) {
               console.log(`[AttendanceView] Successfully loaded ${data.employees.length} employees from Google Drive.`);
-              const formatted = data.employees.map((emp: any) => ({
+              driveEmps = data.employees.map((emp: any) => ({
                 id: emp.id,
                 name: emp.name,
                 role: emp.role,
                 photoUrl: emp.photoUrl
               }));
-              setRegisteredEmployees(formatted);
-              localStorage.setItem('cnw-registered-employees', JSON.stringify(formatted));
-              loadedFromDrive = true;
             }
           } catch (jsonErr) {
-            console.warn("[AttendanceView] Failed to parse drive employees JSON response, falling back to database:", jsonErr);
+            console.warn("[AttendanceView] Failed to parse drive employees JSON response:", jsonErr);
           }
         }
 
-        if (!loadedFromDrive) {
-          // Soft fallback to Supabase if endpoint fails or returns non-JSON/empty
-          console.log("[AttendanceView] Falling back to Supabase loading...");
-          const dbEmps = await getEmployeeProfiles();
-          if (dbEmps && dbEmps.length > 0) {
-            const formatted = dbEmps.map(emp => ({
+        // Always query Supabase profiles to merge and append any manually registered workers
+        console.log("[AttendanceView] Loading additional employee profiles from Supabase DB...");
+        const dbEmps = await getEmployeeProfiles();
+        
+        const mergedMap = new Map<string, { id?: string; name: string; role: string; photoUrl: string }>();
+        
+        // 1. Add employees from Google Drive first
+        driveEmps.forEach(emp => {
+          mergedMap.set(emp.name.toLowerCase().trim(), emp);
+        });
+
+        // 2. Add/Merge employees from Supabase database
+        if (dbEmps && dbEmps.length > 0) {
+          dbEmps.forEach(emp => {
+            mergedMap.set(emp.name.toLowerCase().trim(), {
               id: emp.id,
               name: emp.name,
               role: emp.role,
               photoUrl: emp.photoUrl
-            }));
-            setRegisteredEmployees(formatted);
-            localStorage.setItem('cnw-registered-employees', JSON.stringify(formatted));
-          }
+            });
+          });
+        }
+
+        const finalEmployees = Array.from(mergedMap.values());
+        if (finalEmployees.length > 0) {
+          setRegisteredEmployees(finalEmployees);
+          localStorage.setItem('cnw-registered-employees', JSON.stringify(finalEmployees));
         }
       } catch (err) {
         console.error("Failed to load employee profiles on mount:", err);
@@ -592,7 +602,7 @@ export default function AttendanceView({
           module: 'ลงทะเบียนพนักงานใหม่',
           docId,
           uploadBy: regName.trim(),
-          status: `✨ ลงทะเบียนพนักงานใหม่คนล่าสุด: ตำแหน่ง ${regRole}`
+          status: `✨ ลงทะเบียนพนักงานใหม่คนล่าสุด: แผนก ${regRole}`
         });
       } catch (err) {
         console.error("Failed to upload registration photo:", err);
@@ -608,7 +618,7 @@ export default function AttendanceView({
           jobType: 'ลงทะเบียนพนักงานใหม่',
           operator: regName.trim(),
           timestamp: thaiDate,
-          status: `✨ ลงทะเบียนพนักงานใหม่คนล่าสุด: ตำแหน่ง ${regRole} (ภาพตัวอย่าง)`,
+          status: `✨ ลงทะเบียนพนักงานใหม่คนล่าสุด: แผนก ${regRole} (ภาพตัวอย่าง)`,
           imageUrl: regPhoto
         });
       } catch (e) {
@@ -645,7 +655,7 @@ export default function AttendanceView({
     setRegPhoto('https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&q=80&w=150');
     setRegisteringEmployee(false);
     
-    alert(`🎉 ลงทะเบียนพนักงานใหม่ "${newEmp.name}" ตำแหน่ง "${newEmp.role}" สำเร็จและยิง LINE พร้อมอัปโหลดรูปขึ้น Google Drive เรียบร้อยแล้ว!`);
+    alert(`🎉 ลงทะเบียนพนักงานใหม่ "${newEmp.name}" แผนก "${newEmp.role}" สำเร็จและยิง LINE พร้อมอัปโหลดรูปขึ้น Google Drive เรียบร้อยแล้ว!`);
 
     // Auto populate fields in clock-in form for user convenience
     setWorkName(newEmp.name);
@@ -976,7 +986,7 @@ export default function AttendanceView({
               </div>
 
               <div>
-                <label className="block text-[10.5px] text-stone-500 font-extrabold mb-1">🏗️ สายงาน / ตำแหน่งหน้าที่ประจำการ (Position/Role)</label>
+                <label className="block text-[10.5px] text-stone-500 font-extrabold mb-1">🏢 แผนก (Department)</label>
                 <select
                   value={regRole}
                   onChange={(e) => setRegRole(e.target.value)}
@@ -1297,7 +1307,7 @@ export default function AttendanceView({
                     <div className="relative">
                       <input 
                         type="text" 
-                        placeholder="🔍 ค้นหาพนักงาน/ตำแหน่ง..."
+                        placeholder="🔍 ค้นหาพนักงาน/แผนก..."
                         value={searchEmployeeQuery}
                         onChange={(e) => setSearchEmployeeQuery(e.target.value)}
                         className="bg-white border border-stone-300 rounded-xl px-3 py-1 text-[11px] font-bold text-stone-700 w-full sm:w-[220px] outline-none focus:border-orange-500 shadow-sm"
@@ -1377,7 +1387,7 @@ export default function AttendanceView({
                     />
                   </div>
                   <div>
-                    <label className="block text-[10.5px] text-stone-500 font-bold mb-1">ตำแหน่งสายงาน / วิชาชีพ</label>
+                    <label className="block text-[10.5px] text-stone-500 font-bold mb-1">แผนก</label>
                     <input
                       type="text"
                       className="w-full bg-white border border-stone-200 rounded-xl px-3 py-1.5 text-stone-700 outline-none text-xs shadow-sm"
@@ -1883,7 +1893,7 @@ export default function AttendanceView({
                     </div>
 
                     <div>
-                      <label className="block text-[10px] text-stone-500 font-bold mb-1">💼 ตำแหน่งงาน / วิชาชีพ</label>
+                      <label className="block text-[10px] text-stone-500 font-bold mb-1">💼 แผนก</label>
                       <input
                         type="text"
                         required
@@ -1984,7 +1994,7 @@ export default function AttendanceView({
 
                 <div className="bg-white border border-stone-200 p-3 rounded-xl text-[11px] text-stone-600 space-y-2.5 shadow-sm">
                   <p>👤 <strong>พนักงาน:</strong> {selectedLog.employeeName}</p>
-                  <p>💼 <strong>ตำแหน่ง/สายงาน:</strong> {selectedLog.role}</p>
+                  <p>💼 <strong>แผนก:</strong> {selectedLog.role}</p>
                   <p>🏗️ <strong>ไซต์งาน:</strong> {selectedLog.siteName}</p>
                   <p>🕒 <strong>เวลาเข้างาน:</strong> <span className="text-emerald-600 font-bold">{selectedLog.checkInTime} น.</span></p>
 
@@ -2341,7 +2351,7 @@ export default function AttendanceView({
               <tr className="border-b border-stone-200/60 text-stone-400 font-extrabold uppercase tracking-wider text-[10px]">
                 <th className="py-3 px-3">รูปถ่าย</th>
                 <th className="py-3 px-3">ชื่อช่าง / พนักงาน</th>
-                <th className="py-3 px-3">ตำแหน่งงาน</th>
+                <th className="py-3 px-3">แผนก</th>
                 <th className="py-3 px-3">สถานที่เข้างาน</th>
                 <th className="py-3 px-3">เวลาตอกเข้า</th>
                 <th className="py-3 px-3">เวลาตอกออก</th>

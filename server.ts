@@ -434,9 +434,25 @@ async function startServer() {
         const errData = await response.json().catch(() => ({}));
         console.error("LINE API Error:", response.status, errData);
         
+        const isDefault = activeToken.startsWith("emexPY8OBr3") || activeGroupId === "Cfd9f3c46111cf32db3e3e69b6961fa3e";
+        const isLimitError = response.status === 429 || (errData && errData.message && errData.message.toLowerCase().includes("limit"));
+
+        if (isDefault) {
+          // If using the public example token and it gets rate-limited or fails, gracefully switch to Simulation Mode
+          // This ensures that the user's trial operations like check-ins or work orders are never blocked by shared quota exhaustion.
+          console.warn(`[LINE Sandbox Emulator] Public trial bot rate-limited or unavailable (Status ${response.status}). Simulating push success.`);
+          return res.json({ 
+            success: true, 
+            simulated: true, 
+            warning: isLimitError 
+              ? "🔴 ดำเนินการสำเร็จ (จำลองการแจ้งข้อความ): โควตาส่งข้อความในกลุ่มพรีวิวตัวอย่างเต็มกำหนดเดือนนี้แล้ว กรุณากำหนดแชนเนล Token และไอดีกลุ่มคุณเองในเมนู 'ตั้งค่ากลุ่มไลน์แจ้งเตือน' เพื่อรับข้อความจริง"
+              : "🔴 ดำเนินการสำเร็จ (จำลองการแจ้งข้อความ): ใช้ข้อมูลกลุ่มตัวอย่างระบบ กรุณาระบุรหัส Token และ Group ID ของคุณในหน้าตั้งค่าก่อนทดสอบการแจ้งเตือนจริง"
+          });
+        }
+
         let customMessage = "LINE API Error";
-        if (activeToken.startsWith("emexPY8OBr3") || activeGroupId === "Cfd9f3c46111cf32db3e3e69b6961fa3e") {
-          customMessage = "🔴 ใช้รหัสระบบตัวอย่าง: กรุณาระบุรหัส Token และ Group ID กลุ่มแชทไลน์ของคุณเองในเมนู 'ตั้งค่ากลุ่มไลน์แจ้งเตือน' จากนั้นเชิญ LINE Bot (OA) เข้าร่วมกลุ่มแชทก่อนทดสอบใช้งาน";
+        if (isLimitError) {
+          customMessage = "⚠️ บริการ LINE API ของคุณใช้งานครบขีดจำกัดโควตาประจำเดือนนี้แล้ว (429: You have reached your monthly limit) การแจ้งเตือนจึงไม่สามารถถูกโพสต์ลงกลุ่มแชทได้สำเร็จ";
         } else if (errData.message === "Failed to send messages") {
           customMessage = "Push Failed: บอทยังไม่ได้เข้าร่วมกลุ่ม (ยังไม่ถูกเชิญเข้ากลุ่มไลน์) หรือระบุรหัส Group ID ไม่ถูกต้อง กรุณาเข้ากลุ่ม ➡️ กดเมนูขวาบน ➡️ เชิญบ็อต (LINE Bot OA คู่ตัว) เข้าร่วมกลุ่มก่อนทำการแจ้งเตือน";
         } else if (errData.details) {

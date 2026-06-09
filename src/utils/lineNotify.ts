@@ -198,6 +198,10 @@ export async function pushLineFlexMessage(flexMessage: any, category: 'attendanc
       console.error(`Failed to push LINE notification (${category}):`, result.error || "Unknown error");
       return { success: false, error: result.error || "Unknown error" };
     }
+    if (result.simulated) {
+      console.warn(`[LINE Sandbox Emulator] ${result.warning}`);
+      return { success: true, simulated: true, warning: result.warning };
+    }
     console.log(`LINE push notification (${category}) sent successfully to Group: ${groupId}`);
     return { success: true };
   } catch (error: any) {

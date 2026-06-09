@@ -110,7 +110,7 @@ export default function LineSettingsView() {
     fallback: false
   });
 
-  const [testStatus, setTestStatus] = useState<Record<string, { loading: boolean; success?: boolean; error?: string }>>({
+  const [testStatus, setTestStatus] = useState<Record<string, { loading: boolean; success?: boolean; error?: string; simulated?: boolean; warning?: string }>>({
     attendance: { loading: false },
     work: { loading: false },
     fuel: { loading: false },
@@ -254,7 +254,15 @@ export default function LineSettingsView() {
       const dbCategory = category === 'work' ? 'operations' : category;
       const result = await testLineNotification(dbCategory);
       if (result.success) {
-        setTestStatus(prev => ({ ...prev, [category]: { loading: false, success: true } }));
+        setTestStatus(prev => ({ 
+          ...prev, 
+          [category]: { 
+            loading: false, 
+            success: true, 
+            simulated: result.simulated, 
+            warning: result.warning 
+          } 
+        }));
       } else {
         setTestStatus(prev => ({ ...prev, [category]: { loading: false, success: false, error: result.error } }));
       }
@@ -564,9 +572,17 @@ export default function LineSettingsView() {
 
               {/* Test Status Indicator */}
               {testStatus.attendance.success !== undefined && (
-                <div className={`text-[10px] p-2 rounded-xl border font-semibold ${testStatus.attendance.success ? 'bg-emerald-50 border-emerald-150 text-emerald-700' : 'bg-rose-50 border-rose-150 text-rose-700'}`}>
+                <div className={`text-[10px] p-2 rounded-xl border font-semibold ${
+                  testStatus.attendance.success 
+                    ? (testStatus.attendance.simulated ? 'bg-amber-50 border-amber-250 text-amber-800' : 'bg-emerald-50 border-emerald-150 text-emerald-700') 
+                    : 'bg-rose-50 border-rose-150 text-rose-700'
+                }`}>
                   {testStatus.attendance.success ? (
-                    <span>🟢 สำเร็จ! ข้อความสติ๊กเกอร์แจ้งพิกัดส่งเข้าห้องแชทสำเร็จแล้ว</span>
+                    testStatus.attendance.simulated ? (
+                      <span>⚠️ {testStatus.attendance.warning}</span>
+                    ) : (
+                      <span>🟢 สำเร็จ! ข้อความสติ๊กเกอร์แจ้งพิกัดส่งเข้าห้องแชทสำเร็จแล้ว</span>
+                    )
                   ) : (
                     <span>🔴 ล้มเหลว: {testStatus.attendance.error || 'โทเค็นปฏิเสธการเชื่อมต่อ'}</span>
                   )}
@@ -689,9 +705,17 @@ export default function LineSettingsView() {
 
               {/* Test Status Indicator */}
               {testStatus.work.success !== undefined && (
-                <div className={`text-[10px] p-2 rounded-xl border font-semibold ${testStatus.work.success ? 'bg-emerald-50 border-emerald-150 text-emerald-700' : 'bg-rose-50 border-rose-150 text-rose-700'}`}>
+                <div className={`text-[10px] p-2 rounded-xl border font-semibold ${
+                  testStatus.work.success 
+                    ? (testStatus.work.simulated ? 'bg-amber-50 border-amber-250 text-amber-800' : 'bg-emerald-50 border-emerald-150 text-emerald-700') 
+                    : 'bg-rose-50 border-rose-150 text-rose-700'
+                }`}>
                   {testStatus.work.success ? (
-                    <span>🟢 สำเร็จ! บัตรงานทดสอบส่งเข้ารถขุด/คลังชิ้นส่วนสำรองเรียบร้อย</span>
+                    testStatus.work.simulated ? (
+                      <span>⚠️ {testStatus.work.warning}</span>
+                    ) : (
+                      <span>🟢 สำเร็จ! บัตรงานทดสอบส่งเข้ารถขุด/คลังชิ้นส่วนสำรองเรียบร้อย</span>
+                    )
                   ) : (
                     <span>🔴 ล้มเหลว: {testStatus.work.error || 'กรุณาตรวจสอบผู้ประสานงานหลัก'}</span>
                   )}
@@ -814,9 +838,17 @@ export default function LineSettingsView() {
 
               {/* Test Status Indicator */}
               {testStatus.fuel.success !== undefined && (
-                <div className={`text-[10px] p-2 rounded-xl border font-semibold ${testStatus.fuel.success ? 'bg-emerald-50 border-emerald-150 text-emerald-700' : 'bg-rose-50 border-rose-150 text-rose-700'}`}>
+                <div className={`text-[10px] p-2 rounded-xl border font-semibold ${
+                  testStatus.fuel.success 
+                    ? (testStatus.fuel.simulated ? 'bg-amber-50 border-amber-250 text-amber-800' : 'bg-emerald-50 border-emerald-150 text-emerald-700') 
+                    : 'bg-rose-50 border-rose-150 text-rose-700'
+                }`}>
                   {testStatus.fuel.success ? (
-                    <span>🟢 สำเร็จ! ข้อความสลิปกรอกเบิกเติมเชื้อเพลิงส่งเข้าสำเร็จแล้ว</span>
+                    testStatus.fuel.simulated ? (
+                      <span>⚠️ {testStatus.fuel.warning}</span>
+                    ) : (
+                      <span>🟢 สำเร็จ! ข้อความสลิปกรอกเบิกเติมเชื้อเพลิงส่งเข้าสำเร็จแล้ว</span>
+                    )
                   ) : (
                     <span>🔴 ล้มเหลว: {testStatus.fuel.error || 'การเชื่อมต่อถูกตัดขาด'}</span>
                   )}
@@ -939,9 +971,17 @@ export default function LineSettingsView() {
 
               {/* Test Status Indicator */}
               {testStatus.test.success !== undefined && (
-                <div className={`text-[10px] p-2 rounded-xl border font-semibold ${testStatus.test.success ? 'bg-indigo-50 border-indigo-150 text-indigo-700' : 'bg-rose-50 border-rose-150 text-rose-700'}`}>
+                <div className={`text-[10px] p-2 rounded-xl border font-semibold ${
+                  testStatus.test.success 
+                    ? (testStatus.test.simulated ? 'bg-amber-50 border-amber-250 text-amber-800' : 'bg-indigo-50 border-indigo-150 text-indigo-700') 
+                    : 'bg-rose-50 border-rose-150 text-rose-700'
+                }`}>
                   {testStatus.test.success ? (
-                    <span>🟢 สำเร็จ! ส่งครบทุกระบบ (ตอกบัตร, ปฏิบัติงาน, น้ำมัน) เข้ากลุ่มทดสอบแล้ว</span>
+                    testStatus.test.simulated ? (
+                      <span>⚠️ {testStatus.test.warning}</span>
+                    ) : (
+                      <span>🟢 สำเร็จ! ส่งครบทุกระบบ (ตอกบัตร, ปฏิบัติงาน, น้ำมัน) เข้ากลุ่มทดสอบแล้ว</span>
+                    )
                   ) : (
                     <span>🔴 ล้มเหลว: {testStatus.test.error || 'กรุณาตรวจสอบการตั้งค่า'}</span>
                   )}
